@@ -1,0 +1,2250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Extraction Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --bg2: #ffffff;
+    --bg3: #e8eaf0;
+    --bg4: #dde0e8;
+    --border: #d0d4de;
+    --border2: #b8bece;
+    --text: #1a1e2a;
+    --text2: #4a5168;
+    --text3: #8b93a8;
+    --accent: #3a6fd8;
+    --accent2: #2a5bbf;
+    --done: #1a9e64;
+    --done-bg: #d4f4e6;
+    --prog: #c47d0a;
+    --prog-bg: #fef0d0;
+    --todo: #5a6278;
+    --todo-bg: #ebedf2;
+    --neg: #c0392b;
+    --pos: #1a9e64;
+    --radius: 8px;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+  }
+  .nav {
+    display: flex;
+    align-items: center;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .nav-brand {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 16px 0;
+    margin-right: 40px;
+    white-space: nowrap;
+  }
+  .nav-tabs { display: flex; gap: 2px; }
+  .nav-tab {
+    padding: 18px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.08s, border-color 0.08s;
+    user-select: none;
+    letter-spacing: 0.02em;
+  }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .nav-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .nav-status {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+  }
+  .btn-refresh {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    color: var(--text2);
+    padding: 6px 14px;
+    font-size: 12px;
+    font-family: var(--mono);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .btn-refresh:hover { background: var(--bg4); color: var(--text); }
+  .screen {
+    display: none;
+    padding: 28px 28px 60px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .screen.active {
+    display: block;
+    animation: screen-in 0.2s ease;
+  }
+  @keyframes screen-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 12px;
+    margin-top: 32px;
+  }
+  .section-label:first-child { margin-top: 0; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .kpi-row-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .kpi-row-5 .kpi-card { padding: 12px 14px; }
+  .kpi-row-5 .kpi-label { font-size: 10px; margin-bottom: 5px; }
+  .kpi-row-5 .kpi-value { font-size: 22px; }
+  .kpi-row-5 .kpi-sub   { font-size: 10px; margin-top: 4px; }
+  .kpi-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    position: relative;
+    overflow: visible;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .kpi-card.c-total::before { background: var(--accent); }
+  .kpi-card-active { outline: 2px solid var(--accent); background: #eef2fc; }
+  .kpi-card-active:hover { background: #e6ecfa; }
+  .kpi-info { position: relative; display: inline-block; vertical-align: middle; margin-left: 5px; cursor: default; }
+  .kpi-info-icon { font-size: 12px; color: var(--text3); line-height: 1; }
+  .kpi-info-popup {
+    display: none; position: absolute; bottom: calc(100% + 6px); left: 50%;
+    transform: translateX(-50%); z-index: 200;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 10px 14px;
+    width: 240px; font-size: 12px; color: var(--text2); text-align: left;
+    font-family: var(--sans); font-weight: 400; line-height: 1.5;
+    pointer-events: none;
+  }
+  .kpi-info:hover .kpi-info-popup { display: block; }
+  .kpi-card.c-done::before  { background: var(--done); }
+  .kpi-card.c-prog::before  { background: var(--prog); }
+  .kpi-card.c-todo::before  { background: var(--text3); }
+  /* Auto-tests card backgrounds + matching top-bar colors */
+  #at-kpis .kpi-card.c-total          { background: #e6ecf9; }
+  #at-kpis .kpi-card.c-total::before  { background: #5b7fd4; }
+  #at-kpis .kpi-card.c-prog           { background: #edf7f2; }
+  #at-kpis .kpi-card.c-prog::before   { background: #3dab72; }
+  #at-kpis .kpi-card.c-todo           { background: #fdf4ea; }
+  #at-kpis .kpi-card.c-todo::before   { background: #d4893a; }
+  #at-kpis .kpi-card.c-reval          { background: #eaf6f8; }
+  #at-kpis .kpi-card.c-reval::before   { background: #2da8bc; }
+  #at-kpis .kpi-card.c-done           { background: #eef1fb; }
+  #at-kpis .kpi-card.c-done::before   { background: #7b9de0; }
+  #at-kpis .kpi-card.kpi-card-active  { background: #dde6f8; }
+  .kpi-label { font-size: 11px; font-weight: 500; color: var(--text2); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px; }
+  .kpi-value { font-family: var(--mono); font-size: 32px; font-weight: 600; color: var(--text); line-height: 1; }
+  .kpi-sub   { font-family: var(--mono); font-size: 11px; color: var(--text3); margin-top: 6px; }
+  .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: var(--bg3);
+    padding: 10px 14px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text2);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    position: sticky;
+    top: 0;
+  }
+  thead th:hover { color: var(--text); }
+  thead th.sort-asc::after  { content: ' \2191'; color: var(--accent); }
+  thead th.sort-desc::after { content: ' \2193'; color: var(--accent); }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--bg3); }
+  tbody td { padding: 9px 14px; color: var(--text); font-size: 13px; text-align: center; }
+  tbody td.mono { font-family: var(--mono); }
+  tbody td.left { text-align: left; }
+  thead th.left { text-align: left; }
+  .status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    min-width: 60px;
+    text-align: center;
+  }
+  .badge-done { background: var(--done-bg); color: var(--done); border-color: #12804f; }
+  .badge-prog { background: var(--prog-bg); color: var(--prog); border-color: #9e6408; }
+  .badge-todo { background: var(--todo-bg); color: var(--todo); border-color: #747d95; }
+  .badge-reval { background: #e8eefb; color: var(--accent); border-color: #214ea9; }
+  .badge-removed { background: #fbeaea; color: var(--neg); border-color: #cc4b3f; }
+  .badge-na { background: #eef0f4; color: var(--text2); border-color: var(--border2); }
+  .row-selected td { background: #eef2fc !important; }
+  .delta-pos { color: var(--pos); font-family: var(--mono); font-size: 12px; }
+  .delta-neg { color: var(--neg); font-family: var(--mono); font-size: 12px; }
+  .delta-neu { color: var(--text3); font-family: var(--mono); font-size: 12px; }
+  .filter-bar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; align-items: flex-end; }
+  .filter-group { display: flex; flex-direction: column; gap: 4px; }
+  .filter-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); font-family: var(--mono); }
+  select, input[type="text"] {
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 7px 12px;
+    font-size: 13px;
+    font-family: var(--sans);
+    outline: none;
+    transition: border-color 0.15s;
+    min-width: 160px;
+  }
+  select:focus, input[type="text"]:focus { border-color: var(--accent); }
+  option { background: var(--bg3); }
+
+  /* ===== MULTI-SELECT DROPDOWN ===== */
+  .ms-wrap { position: relative; min-width: 160px; }
+  .ms-btn {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    background: var(--bg2); border: 1px solid var(--border2); border-radius: 6px;
+    color: var(--text); padding: 7px 12px; font-size: 13px; font-family: var(--sans);
+    cursor: pointer; white-space: nowrap; min-width: 160px; user-select: none;
+    transition: border-color 0.15s;
+  }
+  .ms-btn:hover, .ms-wrap.open .ms-btn { border-color: var(--accent); }
+  .ms-btn-label { overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+  .ms-btn-arrow { color: var(--text3); font-size: 9px; flex-shrink: 0; }
+  .ms-panel {
+    display: block; position: absolute; top: calc(100% + 4px); left: 0; z-index: 300;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    min-width: 180px; max-height: 260px; overflow-y: auto;
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s step-end;
+    transform-origin: top left;
+    will-change: opacity, transform;
+  }
+  .ms-wrap.open .ms-panel {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity 0.14s ease, transform 0.14s ease;
+  }
+  .ms-search {
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--bg2);
+  }
+  .ms-search input {
+    width: 100%; padding: 5px 8px; font-size: 12px;
+    border: 1px solid var(--border2); border-radius: 4px;
+    background: var(--bg); color: var(--text); font-family: var(--sans);
+    min-width: unset;
+  }
+  .ms-options { padding: 4px 0; }
+  .ms-option {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px; cursor: pointer; font-size: 13px; color: var(--text);
+  }
+  .ms-option:hover { background: var(--bg3); }
+  .ms-option input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; margin: 0; }
+  .ms-option.ms-all { border-bottom: 1px solid var(--border); font-weight: 600; }
+  .ms-clear {
+    padding: 6px 12px; border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--accent); cursor: pointer; text-align: center;
+    font-family: var(--mono);
+  }
+  .ms-clear:hover { background: var(--bg3); }
+  .search-wrap { position: relative; flex: 1; min-width: 220px; max-width: 360px; }
+  .search-wrap input { width: 100%; padding-left: 34px; }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text3); font-size: 14px; pointer-events: none; }
+  .chart-wrap {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .chart-inner { height: 260px; }
+  .new-fields-card {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 28px;
+    margin-top: 20px;
+  }
+  .new-fields-card .nf-label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .new-fields-card .nf-val   { font-family: var(--mono); font-size: 28px; font-weight: 600; }
+  .col-group-header {
+    background: var(--bg4);
+    text-align: center !important;
+    border-left: 1px solid var(--border2);
+    border-right: 1px solid var(--border2);
+  }
+  thead th.sub { font-size: 9px; background: var(--bg3); }
+  .empty-row td { text-align: center; color: var(--text3); padding: 28px; font-style: italic; }
+  .priority-table thead th { cursor: default; }
+  .priority-table thead th:hover { color: var(--text2); }
+  .score-table tbody tr { cursor: pointer; }
+  .score-table tbody tr:hover { background: var(--bg4); }
+  .score-table tbody tr.selected { background: #dde8fb; outline: 2px solid var(--accent); outline-offset: -2px; }
+  .filter-hint { font-family: var(--mono); font-size: 10px; color: var(--accent); margin-left: 8px; vertical-align: middle; }
+  .clear-filter { font-family: var(--mono); font-size: 10px; color: var(--accent); cursor: pointer; text-decoration: underline; margin-left: 6px; vertical-align: middle; }
+  .loading-overlay {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  .error-msg {
+    background: rgba(224,92,92,0.1);
+    border: 1px solid var(--neg);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    color: var(--neg);
+    font-family: var(--mono);
+    font-size: 13px;
+    margin: 20px 0;
+  }
+  /* Score screen two-column layout */
+  .score-cols {
+    display: grid;
+    grid-template-columns: 390px 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 24px;
+    row-gap: 12px;
+    margin-top: 28px;
+  }
+  .score-col-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text3);
+    align-self: center;
+  }
+  .score-left .section-label:first-child,
+  .score-right .section-label:first-child { margin-top: 0; }
+  .score-left .priority-table td,
+  .score-left .priority-table th { padding: 6px 10px; font-size: 12px; }
+  .btn-snapshot {
+    background: var(--accent);
+    border: none;
+    border-radius: 5px;
+    color: #fff;
+    padding: 2px 9px;
+    font-size: 10px;
+    font-family: var(--mono);
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    margin-left: 10px;
+    vertical-align: middle;
+    line-height: 18px;
+    display: inline-block;
+  }
+  .btn-snapshot:hover { background: var(--accent2); }
+  .btn-snapshot:disabled { opacity: 0.6; cursor: default; }
+  /* Weekly dynamics table */
+  .weekly-table td, .weekly-table th { padding: 6px 9px; font-size: 12px; text-align: center; }
+  .weekly-table thead th.grp {
+    text-align: center;
+    background: var(--bg4);
+    border-left: 1px solid var(--border2);
+  }
+  .weekly-table thead th.sub { font-size: 9px; text-align: center; }
+  .weekly-table td.num { font-family: var(--mono); text-align: center; }
+  .weekly-table td:nth-child(2) { text-align: left; }
+  .weekly-table tr.w-baseline td { color: var(--text3); font-style: italic; }
+  .weekly-cell-pos-done {
+    background: #e6f9f0;
+    color: var(--done);
+    font-weight: 700;
+    border-radius: 4px;
+  }
+  .weekly-cell-pos-prog {
+    background: #fff4e0;
+    color: var(--prog);
+    font-weight: 700;
+    border-radius: 4px;
+  }
+  .weekly-cell-pos-new {
+    background: #e8eefb;
+    color: var(--accent);
+    font-weight: 700;
+    border-radius: 4px;
+  }
+  .weekly-cell-pos-removed {
+    background: #fbeaea;
+    color: var(--neg);
+    font-weight: 700;
+    border-radius: 4px;
+  }
+  .weekly-taken-at {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 1px;
+  }
+  .weekly-empty {
+    padding: 36px 24px;
+    text-align: center;
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.8;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  /* History page */
+  .history-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .history-summary .kpi-card { padding: 14px 16px; }
+  .history-summary .kpi-label { font-size: 10px; margin-bottom: 6px; }
+  .history-summary .kpi-value { font-size: 24px; }
+  .history-table td.field-name,
+  .history-table th.field-name {
+    min-width: 210px;
+    max-width: 320px;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.35;
+  }
+  .history-table td.doc-type,
+  .history-table th.doc-type {
+    min-width: 150px;
+    max-width: 220px;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.35;
+  }
+  .history-type {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+  }
+  .history-type-added {
+    background: #e8eefb;
+    color: var(--accent);
+    border-color: #b8c8ef;
+  }
+  .history-type-changed {
+    background: #edf7f2;
+    color: var(--done);
+    border-color: #b6e1ca;
+  }
+  .history-type-removed {
+    background: #fbeaea;
+    color: var(--neg);
+    border-color: #e5b5b1;
+  }
+  @media (max-width: 1100px) {
+    .history-summary { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 1100px) {
+    .score-cols { grid-template-columns: 1fr; }
+  }
+  /* Fields screen */
+  .field-cell { width: 220px; min-width: 160px; max-width: 260px; white-space: normal; word-break: break-word; line-height: 1.4; }
+  .doctype-cell { width: 170px; min-width: 130px; max-width: 200px; white-space: normal; word-break: break-word; line-height: 1.35; font-size: 12.5px; }
+  #fields-overview { margin-bottom: 20px; }
+  .fov-cards { display: grid; grid-template-columns: repeat(4, 1fr) 1.8fr; gap: 12px; }
+  .fov-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .fov-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--border2);
+  }
+  /* per-card backgrounds */
+  .fov-c1 { background: #eef1fb; }
+  .fov-c2 { background: #edf7f2; }
+  .fov-c3 { background: #fdf4ea; }
+  .fov-c4 { background: #fdf0f5; }
+  .fov-card.fov-target { background: #e6ecf9; }
+  .fov-c1::before { background: #7b9de0; }
+  .fov-c2::before { background: #5bbf8a; }
+  .fov-c3::before { background: #e0a857; }
+  .fov-c4::before { background: #d97fa0; }
+  .fov-card.fov-target::before { background: var(--accent); }
+  /* --- fov label/value/sub: same proportions as Score kpi-row-5 --- */
+  .fov-label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text2);
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .fov-card.fov-target .fov-label {
+    font-size: 11px;
+    font-weight: 500;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    line-height: 1.4;
+    margin-bottom: 8px;
+  }
+  .fov-value {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1;
+  }
+  .fov-card.fov-target .fov-value { font-size: 32px; font-weight: 600; color: var(--accent); }
+  .fov-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 4px;
+  }
+
+  /* ===== FAQ PAGE ===== */
+  .faq-page { max-width: 960px; }
+  .faq-jump {
+    display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap;
+  }
+  .faq-jump a {
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--accent); background: #eef2fc;
+    border: 1px solid #c5d4f5; border-radius: 6px;
+    padding: 6px 14px; text-decoration: none;
+    transition: background 0.15s;
+  }
+  .faq-jump a:hover { background: #dce7fb; }
+  .faq-section { margin-bottom: 36px; scroll-margin-top: 70px; }
+  .faq-section-title {
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--accent); border-bottom: 2px solid var(--accent);
+    padding-bottom: 8px; margin-bottom: 18px;
+  }
+  .faq-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .faq-card-header {
+    padding: 13px 18px; font-weight: 600; font-size: 13px;
+    cursor: pointer; user-select: none;
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--text);
+  }
+  .faq-card-header:hover { background: var(--bg3); }
+  .faq-card-header .faq-chevron { color: var(--text3); font-size: 11px; transition: transform 0.2s; }
+  .faq-card.open .faq-chevron { transform: rotate(180deg); }
+  .faq-card-body {
+    display: none; padding: 0 18px 16px; font-size: 13px;
+    color: var(--text2); line-height: 1.7;
+  }
+  .faq-card.open .faq-card-body { display: block; }
+  .faq-card-body p { margin-bottom: 10px; }
+  .faq-card-body p:last-child { margin-bottom: 0; }
+  .faq-card-body ul { margin: 8px 0 10px 18px; }
+  .faq-card-body li { margin-bottom: 5px; }
+  .faq-card-body code {
+    font-family: var(--mono); font-size: 12px;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 3px; padding: 1px 5px; color: var(--text);
+  }
+  .faq-card-body .faq-formula {
+    font-family: var(--mono); font-size: 12px;
+    background: var(--bg3); border-left: 3px solid var(--accent);
+    padding: 10px 14px; border-radius: 0 6px 6px 0;
+    margin: 10px 0; color: var(--text); line-height: 1.6;
+  }
+  .faq-card-body strong { color: var(--text); }
+  @media (prefers-reduced-motion: reduce) {
+    .screen,
+    .screen.active,
+    .ms-panel,
+    .ms-wrap.open .ms-panel {
+      transition: none;
+      transform: none;
+    }
+    .screen.active { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">&#x2B21; Extraction DB</div>
+  <div class="nav-tabs">
+    <div class="nav-tab active" data-screen="score">Score</div>
+    <div class="nav-tab" data-screen="fields">Fields</div>
+    <div class="nav-tab" data-screen="autotests">Auto-tests</div>
+    <div class="nav-tab" data-screen="history">History</div>
+    <div class="nav-tab" data-screen="faq">FAQ</div>
+  </div>
+  <div class="nav-right">
+    <span class="nav-status" id="nav-status"></span>
+    <button class="btn-refresh" onclick="loadAllData()">&#x21BB; Refresh</button>
+  </div>
+</nav>
+
+<!-- SCREEN 1: SCORE -->
+<div class="screen active" id="screen-score">
+  <div class="section-label">Overview</div>
+  <div class="kpi-row" id="score-kpis"></div>
+
+  <div class="score-cols">
+    <!-- ROW 1: labels -->
+    <div class="score-col-label">Fields by Priority</div>
+    <div class="score-col-label">
+      Weekly Dynamics
+      <button class="btn-snapshot" id="btn-take-snapshot" onclick="takeSnapshot()">+ Snapshot</button>
+    </div>
+
+    <!-- ROW 2: content -->
+    <!-- LEFT: compact priority + model tables -->
+    <div class="score-left">
+      <div class="table-wrap">
+        <table class="priority-table" id="priority-table"></table>
+      </div>
+      <div class="section-label">Extraction by Model</div>
+      <div class="table-wrap">
+        <table class="priority-table" id="model-table"></table>
+      </div>
+    </div>
+
+    <!-- RIGHT: weekly dynamics -->
+    <div class="score-right">
+      <div id="weekly-panel"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 2: HISTORY -->
+<div class="screen" id="screen-history">
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">Week</span>
+      <div class="ms-wrap" id="ms-h-week"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Change Type</span>
+      <div class="ms-wrap" id="ms-h-type"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Model</span>
+      <div class="ms-wrap" id="ms-h-model"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Search</span>
+      <div class="search-wrap">
+        <span class="search-icon">&#x2315;</span>
+        <input type="text" id="h-search" placeholder="Search project, doc type, or field..."/>
+      </div>
+    </div>
+  </div>
+
+  <div class="history-summary" id="history-summary"></div>
+
+  <div class="section-label">Field-Level Changes</div>
+  <div class="table-wrap">
+    <table id="history-table" class="history-table"></table>
+  </div>
+</div>
+
+<!-- SCREEN 2: FIELDS -->
+<div class="screen" id="screen-fields">
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">Project</span>
+      <div class="ms-wrap" id="ms-f-project"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Category</span>
+      <div class="ms-wrap" id="ms-f-category"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Priority</span>
+      <div class="ms-wrap" id="ms-f-priority"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Status</span>
+      <div class="ms-wrap" id="ms-f-status"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Model</span>
+      <div class="ms-wrap" id="ms-f-model"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Search</span>
+      <div class="search-wrap">
+        <span class="search-icon">&#x2315;</span>
+        <input type="text" id="f-search" placeholder="Search document type or field..."/>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">Overview</div>
+  <div id="fields-overview"></div>
+
+  <div class="section-label">Fields Table</div>
+  <div class="table-wrap">
+    <table id="fields-table"></table>
+  </div>
+</div>
+
+<!-- SCREEN 3: AUTO-TESTS -->
+<div class="screen" id="screen-autotests">
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">Project</span>
+      <div class="ms-wrap" id="ms-at-project"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Category</span>
+      <div class="ms-wrap" id="ms-at-category"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Search</span>
+      <div class="search-wrap">
+        <span class="search-icon">&#x2315;</span>
+        <input type="text" id="at-search" placeholder="Search document type..."/>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">Overview</div>
+  <div class="kpi-row kpi-row-5" id="at-kpis"></div>
+
+  <div class="section-label">Documents by Priority</div>
+  <div class="table-wrap">
+    <table class="priority-table" id="at-priority-table"></table>
+  </div>
+
+  <div class="section-label">Auto-tests Table</div>
+  <div class="table-wrap">
+    <table id="at-table"></table>
+  </div>
+</div>
+
+<!-- SCREEN 4: FAQ -->
+<div class="screen" id="screen-faq">
+<div class="faq-page">
+
+  <div class="faq-jump">
+    <a href="#faq-score">&#x2B21; Score</a>
+    <a href="#faq-fields">&#x25A6; Fields</a>
+    <a href="#faq-autotests">&#x2714; Auto-tests</a>
+  </div>
+
+  <!-- SCORE -->
+  <div class="faq-section" id="faq-score">
+    <div class="faq-section-title">Score</div>
+
+    <div class="faq-card open">
+      <div class="faq-card-header" onclick="faqToggle(this)">Overview KPI cards<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>The four top cards aggregate counts across all <strong>non-excluded projects</strong> ("Complience test" is excluded from Score calculations).</p>
+        <ul>
+          <li><strong>Target Fields number by 31 Dec, 2026</strong> — count of all included rows (or the selected Priority subset).</li>
+          <li><strong>To Do</strong> — fields whose current status is <code>To Do</code> (computed status by default, model-specific status when a model row is selected).</li>
+          <li><strong>In Progress</strong> — fields whose computed status is <code>In Progress</code>.</li>
+          <li><strong>Ready for arbitrage</strong> — fields where at least 2 of 4 model statuses are <code>Done</code>.</li>
+        </ul>
+        <p>KPI counts update when either a Priority row or a Model row is selected.</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Field status definition<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>Each field row has four model statuses: <em>Internal Tool</em>, <em>GPT</em>, <em>Gemini</em>, <em>Claude</em>. The computed status for a field is determined by this priority order:</p>
+        <ul>
+          <li><strong>Done</strong> — 3 or more of the 4 model columns have status <code>Done</code>.</li>
+          <li><strong>In Progress</strong> — at least 1 model column has the literal status <code>In Progress</code> (and the Done threshold is not met).</li>
+          <li><strong>To Do</strong> — all other cases.</li>
+        </ul>
+        <p>Status matching is case-insensitive. <code>in_progress</code> is treated the same as <code>In Progress</code>.</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Fields by Priority table<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>Rows show totals broken down by Priority (P1–P5) for the active model or overall. Clicking a priority row filters both the KPI cards and the Model Performance table to that priority.</p>
+        <p>Click the same row again to clear the filter. The <em>× clear</em> link in the section header also resets both filters.</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Model Performance table<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>Each row represents one model (Internal Tool, GPT, Gemini, Claude). Counts reflect status of the model-specific column on each field row.</p>
+        <p>Clicking a model row cross-filters the Priority table to show only that model's data. Both filters are mutually exclusive: selecting a model clears a priority filter and vice versa.</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Weekly Dynamics panel<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>Snapshots are taken automatically every <strong>Friday at 9:00 PM ET</strong> and stored in <code>snapshots.json</code>. Manual snapshots can be triggered with the <em>+ Snapshot</em> button.</p>
+        <ul>
+          <li><strong>Start row</strong> — optional baseline snapshot (<code>week_num = -1</code>). Shows absolute totals for each model's Done / In Progress columns (not deltas).</li>
+          <li><strong>W0, W1, W2 …</strong> — weekly snapshots. Counts shown are <em>deltas vs the previous snapshot</em>. Zero deltas are displayed as <code>–</code>.</li>
+          <li><strong>Done Δ</strong> — number of fields that moved into Done status since the previous snapshot.</li>
+          <li><strong>Prog Δ</strong> — change in In Progress count.</li>
+          <li><strong>New Δ</strong> — new field rows added to the sheet since the previous snapshot.</li>
+          <li><strong>Removed Δ</strong> — field rows removed from the sheet since the previous snapshot.</li>
+        </ul>
+        <p>Week numbers are calculated relative to the baseline Sunday <strong>Mar 15, 2026</strong>. Week 0 covers Mar 15–21.</p>
+        <p>Positive values are highlighted with colored backgrounds (green = Done, amber = In Progress, blue = New).</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Excluded projects<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>The project <strong>"Complience test"</strong> is excluded from Score KPI cards, Fields by Priority, and Model Performance calculations.</p>
+        <p>In Weekly Dynamics, compliance rows are excluded from Start totals and W0 Total/Done logic.</p>
+        <p>Its fields still appear on the Fields page when no project filter is active.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- FIELDS -->
+  <div class="faq-section" id="faq-fields">
+    <div class="faq-section-title">Fields</div>
+
+    <div class="faq-card open">
+      <div class="faq-card-header" onclick="faqToggle(this)">Overview cards (90% coverage rates)<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>Five KPI cards display the share of rows that reached <strong>90% or higher</strong> in the currently filtered set:</p>
+        <ul>
+          <li><strong>Internal Tool %</strong> — percent of all filtered rows where <code>Internal tools % &gt;= 90</code> (includes "Complience test").</li>
+          <li><strong>GPT %</strong> — percent of filtered rows where <code>GPT % &gt;= 90</code>, excluding project "Complience test" from denominator.</li>
+          <li><strong>Gemini %</strong> — percent of filtered rows where <code>Gemini % &gt;= 90</code>, excluding project "Complience test".</li>
+          <li><strong>Claude %</strong> — percent of filtered rows where <code>Claude % &gt;= 90</code>, excluding project "Complience test".</li>
+          <li><strong>Goal — All fields with 90%+ rate</strong> — percent of all filtered rows where at least one of Internal/GPT/Gemini/Claude percentages is <code>&gt;= 90</code>.</li>
+        </ul>
+        <p>When a denominator is empty, the card displays <code>—</code>.</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Fields table columns<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>The table has 14 columns. Key derived columns:</p>
+        <ul>
+          <li><strong>Goal</strong> — maximum completion % across all four models for that row: <code>MAX(Int%, GPT%, Gemini%, Claude%)</code>.</li>
+          <li><strong>Int. %</strong> — raw Internal tools % from the Excel sheet.</li>
+          <li><strong>GPT %, Gemini %, Claude %</strong> — raw model % columns from the Excel sheet.</li>
+          <li><strong>Internal Tool / GPT / Gemini / Claude</strong> — raw status values rendered as badges.</li>
+          <li><strong>Priority</strong> — P1 through P5 badge from the Priority column.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Filters<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>Six independent filters are applied in sequence (AND logic):</p>
+        <ul>
+          <li><strong>Project</strong> — multi-select.</li>
+          <li><strong>Category</strong> — multi-select.</li>
+          <li><strong>Priority</strong> — multi-select P1–P5.</li>
+          <li><strong>Status</strong> — multi-select values: Done / In Progress / To Do.</li>
+          <li><strong>Model</strong> — multi-select model columns used only together with Status (for example: Status=Done + Model=GPT means GPT status must be Done).</li>
+          <li><strong>Search</strong> — free-text match against Document type and Field name columns (case-insensitive).</li>
+        </ul>
+        <p>Without a Status filter, Model selection alone does not reduce the row set.</p>
+        <p>The Overview cards always reflect the currently filtered rows.</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Sorting<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>Click any column header to sort ascending. Click again to sort descending. An indicator arrow (▲/▼) marks the active sort column.</p>
+        <p>Default sort is the original row order from the Excel sheet.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- AUTO-TESTS -->
+  <div class="faq-section" id="faq-autotests">
+    <div class="faq-section-title">Auto-tests</div>
+
+    <div class="faq-card open">
+      <div class="faq-card-header" onclick="faqToggle(this)">Overview card definitions<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <ul>
+          <li><strong>Total Documents</strong> — count of all auto-test rows matching active project/category/search filters.</li>
+          <li><strong>100 Docs Set</strong> — rows where the <code>100 docs set</code> column equals <code>Yes</code>.</li>
+          <li><strong>To Do</strong> — rows with status <code>To Do</code> (or blank/unrecognized).</li>
+          <li><strong>Revalidated</strong> — rows with status <code>Revalidated</code>.</li>
+          <li><strong>Done</strong> — rows with status <code>Done</code>.</li>
+        </ul>
+        <p>Overview card counts are based on the full project/category/search-filtered set, <em>combined with</em> any active priority row selection (but independent of status card selection).</p>
+        <p>Clicking a card (except Total) filters the detail table to that status / property.</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Status definitions<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <ul>
+          <li><strong>Done</strong> — status column value is <code>done</code> (case-insensitive).</li>
+          <li><strong>Revalidated</strong> — status column value is <code>revalidated</code> (case-insensitive). Shown with a blue badge.</li>
+          <li><strong>In Progress</strong> — status column value is <code>in progress</code> or <code>in_progress</code> (case-insensitive).</li>
+          <li><strong>To Do</strong> — all other values, including blank.</li>
+        </ul>
+        <p>The KPI cards and card-based status filter include <code>Done</code>, <code>Revalidated</code>, and <code>To Do</code>. <code>In Progress</code> appears in the table badge but has no dedicated KPI card/filter.</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Documents by Priority table<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>Shows a breakdown of auto-test documents by priority level. Columns: Priority | Total | 100 Docs Set | To Do | Revalidated | Done.</p>
+        <p>Priority table counts are always based on the <em>base-filtered</em> rows (project/category/search) — the selected status card does NOT affect priority table counts, only the detail table.</p>
+        <p>Clicking a priority row filters the detail table AND the Overview cards to that priority only. Click the same row again to clear.</p>
+        <p>Changing a project/category/search filter resets the priority selection automatically.</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Combined filtering logic<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>Filters are applied in this order to build the final detail table rows:</p>
+        <div class="faq-formula">base rows
+  → project filter
+  → category filter
+  → search filter
+  → priority filter (from row click)
+  → status filter (from card click)</div>
+        <p>The Overview cards reflect after-priority, before-status filtering (so the card counts always sum to Total).</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Target number vs Actual number<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p><strong>Target number</strong> — the expected number of test examples for a document type, read from the <code>Target number</code> column in the Autotests sheet.</p>
+        <p><strong>Actual number</strong> — the current number of test examples, read from the <code>Actual number</code> column.</p>
+        <p>These values are displayed for visibility and can be used for manual analysis; they do not currently change status classification in calculations.</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">100 Docs Set<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p><em>100 Docs Set</em> is a flag column (<code>Yes</code> / <code>No</code>) indicating that a representative set of 100 documents has been assembled for this document type.</p>
+        <p>It is independent of the Status column — a document type can be 100-docs-set without being Done, and vice versa.</p>
+      </div>
+    </div>
+
+    <div class="faq-card">
+      <div class="faq-card-header" onclick="faqToggle(this)">Data source<span class="faq-chevron">&#9660;</span></div>
+      <div class="faq-card-body">
+        <p>Auto-tests data is read from the <strong>Autotests</strong> sheet in <code>data.xlsm</code> via the <code>/api/autotests</code> endpoint. The sheet columns used are:</p>
+        <ul>
+          <li>Project, Category, Document type, Priority, Status</li>
+          <li>100 docs set, Actual number, Target number</li>
+        </ul>
+        <p>All unnamed/empty columns are dropped. Data is refreshed on page load and when the Refresh button is clicked.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+/* ====== STATE ====== */
+let DATA = { fields: [], autoTests: [] };
+var WEEKLY_DATA = [];
+var HISTORY_DATA = { weeks: [], changes: [] };
+var activeScreen = 'score';
+var _rafRenders = {};
+var fieldsDirty = true;
+var autoTestsDirty = true;
+var historyDirty = true;
+
+function scheduleRender(key, fn) {
+  if (_rafRenders[key]) cancelAnimationFrame(_rafRenders[key]);
+  _rafRenders[key] = requestAnimationFrame(function() {
+    _rafRenders[key] = null;
+    fn();
+  });
+}
+
+function debounce(fn, waitMs) {
+  var t = null;
+  return function() {
+    var args = arguments;
+    clearTimeout(t);
+    t = setTimeout(function() { fn.apply(null, args); }, waitMs || 120);
+  };
+}
+
+function requestScoreRender() {
+  scheduleRender('score', function() {
+    renderScore();
+    renderWeeklyPanel();
+  });
+}
+
+function requestFieldsRender(force) {
+  if (!force && activeScreen !== 'fields') {
+    fieldsDirty = true;
+    return;
+  }
+  if (!force && !fieldsDirty) return;
+  scheduleRender('fields', function() {
+    renderFields();
+    fieldsDirty = false;
+  });
+}
+
+function requestAutoTestsRender(force) {
+  if (!force && activeScreen !== 'autotests') {
+    autoTestsDirty = true;
+    return;
+  }
+  if (!force && !autoTestsDirty) return;
+  scheduleRender('autotests', function() {
+    renderAutoTests();
+    autoTestsDirty = false;
+  });
+}
+
+function requestHistoryRender(force) {
+  if (!force && activeScreen !== 'history') {
+    historyDirty = true;
+    return;
+  }
+  if (!force && !historyDirty) return;
+  scheduleRender('history', function() {
+    renderHistory();
+    historyDirty = false;
+  });
+}
+
+function warmHiddenScreens() {
+  // Pre-render hidden tabs once after data load so first switch feels instant.
+  if (activeScreen !== 'fields') {
+    setTimeout(function() {
+      if (fieldsDirty) requestFieldsRender(true);
+    }, 0);
+  }
+  if (activeScreen !== 'autotests') {
+    setTimeout(function() {
+      if (autoTestsDirty) requestAutoTestsRender(true);
+    }, 16);
+  }
+  if (activeScreen !== 'history') {
+    setTimeout(function() {
+      if (historyDirty) requestHistoryRender(true);
+    }, 32);
+  }
+}
+
+function deriveFieldStatus(internal, gpt, gemini, claude) {
+  var vals = [internal, gpt, gemini, claude];
+  var doneCount = vals.filter(function(v){ return normalizeStatus(v) === 'Done'; }).length;
+  if (doneCount >= 3) return 'Done';
+  if (vals.some(function(v){ return normalizeStatus(v) === 'In Progress'; })) return 'In Progress';
+  return 'To Do';
+}
+
+/* ====== LOAD FROM API ====== */
+async function loadAllData() {
+  const status = document.getElementById('nav-status');
+  status.textContent = 'Loading...';
+  try {
+    const [fieldsRes, atRes, snapRes, histRes] = await Promise.all([
+      fetch('/api/data'),
+      fetch('/api/autotests'),
+      fetch('/api/snapshots'),
+      fetch('/api/history')
+    ]);
+    const fieldsJson = await fieldsRes.json();
+    const atJson     = await atRes.json();
+    const snapJson   = await snapRes.json();
+    const histJson   = await histRes.json();
+
+    if (!fieldsRes.ok || !fieldsJson.success)
+      throw new Error(fieldsJson.error || 'Failed to load fields');
+
+    // Map Excel columns to internal property names
+    DATA.fields = fieldsJson.data.map(function(r) {
+      var docType = r['Document type'] || '';
+      var field = r['Field'] || '';
+      var internal = r['Internal tool'] || 'To Do';
+      var gpt = r['GPT'] || 'To Do';
+      var gemini = r['Gemini'] || 'To Do';
+      var claude = r['Claude'] || 'To Do';
+      return {
+        project:  r['Project']  || '',
+        category: r['Category'] || '',
+        docType:  docType,
+        field:    field,
+        docTypeL: String(docType).toLowerCase(),
+        fieldL:   String(field).toLowerCase(),
+        priority: r['Priority'] !== '' ? Number(r['Priority']) : null,
+        internal: internal,
+        gpt:      gpt,
+        gemini:   gemini,
+        claude:   claude,
+        pct:      r['Internal tools %'] !== '' && r['Internal tools %'] != null ? Number(r['Internal tools %']) : null,
+        gptPct:   r['GPT %'] !== '' && r['GPT %'] != null ? Number(r['GPT %']) : null,
+        geminiPct:r['Gemini %'] !== '' && r['Gemini %'] != null ? Number(r['Gemini %']) : null,
+        claudePct:r['Claude %'] !== '' && r['Claude %'] != null ? Number(r['Claude %']) : null,
+        targetPct:r['Target %'] !== '' && r['Target %'] != null ? Number(r['Target %']) : null,
+        status:   r['Status']   || 'To Do',
+        computedStatus: deriveFieldStatus(internal, gpt, gemini, claude)
+      };
+    });
+
+    if (atRes.ok && atJson.success) {
+      DATA.autoTests = atJson.data.map(function(r) {
+        var docType = r['Document type'] || '';
+        return {
+          project:  r['Project']  || '',
+          category: r['Category'] || '',
+          docType:  docType,
+          docTypeL: String(docType).toLowerCase(),
+          priority: r['Priority'] !== '' && r['Priority'] != null ? Number(r['Priority']) : null,
+          status:   r['Status']   || 'To Do',
+          docs100:  r['100 docs set'] || 'No',
+          actual:   r['Actual number'] !== '' && r['Actual number'] != null ? Number(r['Actual number']) : null,
+          target:   r['Target number'] !== '' && r['Target number'] != null ? Number(r['Target number']) : null
+        };
+      });
+    }
+
+    if (snapRes.ok && snapJson.success) {
+      WEEKLY_DATA = snapJson.weeks || [];
+    }
+    if (histRes.ok && histJson.success) {
+      HISTORY_DATA = {
+        weeks: histJson.weeks || [],
+        changes: histJson.changes || []
+      };
+    } else {
+      HISTORY_DATA = { weeks: [], changes: [] };
+    }
+
+    fieldsDirty = true;
+    autoTestsDirty = true;
+    historyDirty = true;
+
+    status.textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+    // Render current screen
+    requestScoreRender();
+    initFieldsFilters();
+    initAutoTestsFilters();
+    initHistoryFilters();
+    requestFieldsRender(activeScreen === 'fields');
+    requestAutoTestsRender(activeScreen === 'autotests');
+    requestHistoryRender(activeScreen === 'history');
+    warmHiddenScreens();
+
+  } catch (err) {
+    status.textContent = 'Error loading data';
+    document.getElementById('score-kpis').innerHTML =
+      '<div class="error-msg" style="grid-column:1/-1">' + err.message + '</div>';
+  }
+}
+
+function modelLabel(key) {
+  if (!key) return '\u2014';
+  return { internal:'Internal Tool', gpt:'GPT', gemini:'Gemini', claude:'Claude' }[key] || key;
+}
+
+function historyTypeBadge(type) {
+  if (type === 'added') {
+    return '<span class="history-type history-type-added">Added</span>';
+  }
+  if (type === 'removed') {
+    return '<span class="history-type history-type-removed">Removed</span>';
+  }
+  return '<span class="history-type history-type-changed">Status Changed</span>';
+}
+
+/* ====== HELPERS ====== */
+function fieldStatus(row) {
+  if (row.computedStatus) return row.computedStatus;
+  return deriveFieldStatus(row.internal, row.gpt, row.gemini, row.claude);
+}
+
+function normalizeStatus(s) {
+  if (!s) return 'To Do';
+  var l = s.toLowerCase().trim();
+  if (l === 'done') return 'Done';
+  if (l === 'in progress' || l === 'in_progress') return 'In Progress';
+  if (l === 'revalidated') return 'Revalidated';
+  if (l === 'added') return 'Added';
+  if (l === 'removed') return 'Removed';
+  if (l === 'not present') return 'Not Present';
+  if (l === 'present') return 'Present';
+  return 'To Do';
+}
+
+function badge(status) {
+  var s = normalizeStatus(status);
+  if (s === 'Done')        return '<span class="status-badge badge-done">Done</span>';
+  if (s === 'In Progress') return '<span class="status-badge badge-prog">In Progress</span>';
+  if (s === 'Revalidated') return '<span class="status-badge badge-reval">Revalidated</span>';
+  if (s === 'Added')       return '<span class="status-badge badge-reval">Added</span>';
+  if (s === 'Removed')     return '<span class="status-badge badge-removed">Removed</span>';
+  if (s === 'Present')     return '<span class="status-badge badge-na">Present</span>';
+  if (s === 'Not Present') return '<span class="status-badge badge-na">Not Present</span>';
+  return '<span class="status-badge badge-todo">To Do</span>';
+}
+
+function unique(arr, key) {
+  return [...new Set(arr.map(function(r){ return r[key]; }).filter(Boolean))].sort();
+}
+
+function populateSelect(id, values) {
+  var sel = document.getElementById(id);
+  sel.innerHTML = '<option value="__all__">All</option>' +
+    values.map(function(v){ return '<option value="'+v+'">'+v+'</option>'; }).join('');
+}
+
+function getSelectedValue(selectEl) {
+  return selectEl.value === '__all__' ? null : selectEl.value;
+}
+
+function filterByProjectCategory(rows, projSel, catSel) {
+  var project  = getSelectedValue(projSel);
+  var category = getSelectedValue(catSel);
+  return rows.filter(function(r) {
+    return (!project  || r.project  === project) &&
+           (!category || r.category === category);
+  });
+}
+
+function pct(n, d) {
+  return d > 0 ? (n / d * 100).toFixed(1) : '0.0';
+}
+
+function fmt(n) {
+  if (n == null || n === '') return '\u2014';
+  return Number(n).toLocaleString('en-US');
+}
+
+function priorityBadge(p) {
+  var palettes = [
+    {bg:'#3a6fd8', color:'#ffffff'},  // P1 — vivid blue
+    {bg:'#6b95e0', color:'#ffffff'},  // P2
+    {bg:'#a8bfec', color:'#1a1e2a'},  // P3
+    {bg:'#cfd8f5', color:'#4a5168'},  // P4
+    {bg:'#e5eafb', color:'#8b93a8'},  // P5 — dim
+  ];
+  var style = palettes[p - 1] || {bg:'#ebedf2', color:'#8b93a8'};
+  return '<span style="display:inline-block;padding:2px 10px;border-radius:4px;font-family:var(--mono);font-size:11px;font-weight:600;background:'+style.bg+';color:'+style.color+'">P'+p+'</span>';
+}
+
+/* ====== SCREEN 1: SCORE ====== */
+var SCORE_EXCLUDE_PROJECTS = ['Complience test'];
+var scoreFilter = { priority: null, modelKey: null };
+
+function renderScore() {
+  var allFields = DATA.fields.filter(function(r){
+    return SCORE_EXCLUDE_PROJECTS.indexOf(r.project) === -1;
+  });
+
+  // Base set: filter by selected priority (if any)
+  var baseFields = scoreFilter.priority != null
+    ? allFields.filter(function(r){ return r.priority === scoreFilter.priority; })
+    : allFields;
+  var total = baseFields.length;
+
+  // KPI counts: when model selected, use that model's own status column;
+  // when priority selected (or no filter), use combined fieldStatus()
+  var done, prog, todo;
+  if (scoreFilter.modelKey != null) {
+    var mk = scoreFilter.modelKey;
+    done = baseFields.filter(function(r){ return normalizeStatus(r[mk]) === 'Done'; }).length;
+    prog = baseFields.filter(function(r){ return normalizeStatus(r[mk]) === 'In Progress'; }).length;
+    todo = baseFields.filter(function(r){ return normalizeStatus(r[mk]) === 'To Do'; }).length;
+  } else {
+    done = baseFields.filter(function(r){ return fieldStatus(r) === 'Done'; }).length;
+    prog = baseFields.filter(function(r){ return fieldStatus(r) === 'In Progress'; }).length;
+    todo = baseFields.filter(function(r){ return fieldStatus(r) === 'To Do'; }).length;
+  }
+
+  // Score Overview only: "Ready for arbitrage" means at least 2 models are Done.
+  var readyForArbitrage = baseFields.filter(function(r) {
+    var vals = [r.internal, r.gpt, r.gemini, r.claude];
+    var doneCnt = vals.filter(function(v){ return normalizeStatus(v) === 'Done'; }).length;
+    return doneCnt >= 2;
+  }).length;
+
+  // Build filter hint
+  var hint = '';
+  if (scoreFilter.priority != null)
+    hint = '&nbsp;<span class="filter-hint">Priority ' + scoreFilter.priority + '</span><span class="clear-filter" onclick="clearScoreFilter()">&times; clear</span>';
+  if (scoreFilter.modelKey != null) {
+    var mLabel = {internal:'Internal Tool',gpt:'GPT',gemini:'Gemini',claude:'Claude'}[scoreFilter.modelKey];
+    hint = '&nbsp;<span class="filter-hint">' + mLabel + '</span><span class="clear-filter" onclick="clearScoreFilter()">&times; clear</span>';
+  }
+  var subText = total < allFields.length ? 'of ' + allFields.length + ' total' : 'total records';
+
+  document.getElementById('score-kpis').innerHTML =
+    '<div class="kpi-card c-total"><div class="kpi-label">Target Fields number by 31 Dec, 2026'+hint+'</div><div class="kpi-value">'+fmt(total)+'</div><div class="kpi-sub">'+subText+'</div></div>'+
+    '<div class="kpi-card c-todo"><div class="kpi-label">To Do</div><div class="kpi-value">'+fmt(todo)+'</div><div class="kpi-sub">'+pct(todo,total)+'%</div></div>'+
+    '<div class="kpi-card c-prog"><div class="kpi-label">In Progress</div><div class="kpi-value">'+fmt(prog)+'</div><div class="kpi-sub">'+pct(prog,total)+'%</div></div>'+
+    '<div class="kpi-card c-done"><div class="kpi-label">Ready for arbitrage</div><div class="kpi-value">'+fmt(readyForArbitrage)+'</div><div class="kpi-sub">'+pct(readyForArbitrage,total)+'%</div></div>';
+
+  // ---- Priority table ----
+  // Always shows all priorities. Counts reflect:
+  //   • model selected → that model's own status per priority
+  //   • no model filter → combined fieldStatus per priority
+  var priorities = [...new Set(allFields.map(function(r){ return r.priority; }).filter(function(v){ return v != null; }))].sort(function(a,b){return a-b;});
+  var ptHtml = '<thead><tr><th>Priority</th><th>Total</th><th>Done</th><th>In Progress</th><th>To Do</th></tr></thead><tbody>';
+  if (!priorities.length) {
+    ptHtml += '<tr class="empty-row"><td colspan="5">No priority data</td></tr>';
+  } else {
+    priorities.forEach(function(p) {
+      var pRows = allFields.filter(function(r){ return r.priority === p; });
+      var pd, pi, pt2;
+      if (scoreFilter.modelKey != null) {
+        var mk2 = scoreFilter.modelKey;
+        pd  = pRows.filter(function(r){ return normalizeStatus(r[mk2]) === 'Done'; }).length;
+        pi  = pRows.filter(function(r){ return normalizeStatus(r[mk2]) === 'In Progress'; }).length;
+        pt2 = pRows.filter(function(r){ return normalizeStatus(r[mk2]) === 'To Do'; }).length;
+      } else {
+        pd  = pRows.filter(function(r){ return fieldStatus(r) === 'Done'; }).length;
+        pi  = pRows.filter(function(r){ return fieldStatus(r) === 'In Progress'; }).length;
+        pt2 = pRows.filter(function(r){ return fieldStatus(r) === 'To Do'; }).length;
+      }
+      var sel = scoreFilter.priority === p ? ' selected' : '';
+      ptHtml += '<tr class="'+sel+'" data-priority="'+p+'"><td style="padding:7px 14px">'+priorityBadge(p)+'</td><td class="mono">'+fmt(pRows.length)+'</td><td class="mono" style="color:var(--done)">'+fmt(pd)+'</td><td class="mono" style="color:var(--prog)">'+fmt(pi)+'</td><td class="mono" style="color:var(--todo)">'+fmt(pt2)+'</td></tr>';
+    });
+  }
+  var ptEl = document.getElementById('priority-table');
+  ptEl.innerHTML = ptHtml + '</tbody>';
+  ptEl.className = 'priority-table score-table';
+  ptEl.querySelectorAll('tbody tr[data-priority]').forEach(function(tr) {
+    tr.addEventListener('click', function() {
+      var p = Number(tr.dataset.priority);
+      scoreFilter.priority = scoreFilter.priority === p ? null : p;
+      scoreFilter.modelKey = null;
+      renderScore();
+    });
+  });
+
+  // ---- Model table ----
+  // Filtered by selected priority (if any). Counts always use that model's own status column.
+  var mBase = scoreFilter.priority != null
+    ? allFields.filter(function(r){ return r.priority === scoreFilter.priority; })
+    : allFields;
+  var mTotal = mBase.length;
+  var models = [
+    {label:'Internal Tool', key:'internal'},
+    {label:'GPT',           key:'gpt'},
+    {label:'Gemini',        key:'gemini'},
+    {label:'Claude',        key:'claude'}
+  ];
+  var mHtml = '<thead><tr><th>Model</th><th>Done</th><th>In Progress</th><th>To Do</th><th>Done %</th></tr></thead><tbody>';
+  models.forEach(function(m) {
+    var d = mBase.filter(function(r){ return normalizeStatus(r[m.key]) === 'Done'; }).length;
+    var i = mBase.filter(function(r){ return normalizeStatus(r[m.key]) === 'In Progress'; }).length;
+    var t = mBase.filter(function(r){ return normalizeStatus(r[m.key]) === 'To Do'; }).length;
+    var sel = scoreFilter.modelKey === m.key ? ' selected' : '';
+    mHtml += '<tr class="'+sel+'" data-model-key="'+m.key+'"><td>'+m.label+'</td><td class="mono" style="color:var(--done)">'+fmt(d)+'</td><td class="mono" style="color:var(--prog)">'+fmt(i)+'</td><td class="mono" style="color:var(--todo)">'+fmt(t)+'</td><td class="mono">'+pct(d,mTotal)+'%</td></tr>';
+  });
+  var mtEl = document.getElementById('model-table');
+  mtEl.innerHTML = mHtml + '</tbody>';
+  mtEl.className = 'priority-table score-table';
+  mtEl.querySelectorAll('tbody tr[data-model-key]').forEach(function(tr) {
+    tr.addEventListener('click', function() {
+      var k = tr.dataset.modelKey;
+      scoreFilter.modelKey = scoreFilter.modelKey === k ? null : k;
+      scoreFilter.priority = null;
+      renderScore();
+    });
+  });
+}
+
+function clearScoreFilter() {
+  scoreFilter.priority = null;
+  scoreFilter.modelKey = null;
+  renderScore();
+}
+
+/* ====== WEEKLY DYNAMICS ====== */
+function renderWeeklyPanel() {
+  var el = document.getElementById('weekly-panel');
+  if (!el) return;
+  if (!WEEKLY_DATA.length) {
+    el.innerHTML =
+      '<div class="weekly-empty">' +
+      'No snapshots yet.<br>' +
+      'Click <strong>Set Start</strong> to record the baseline, then <strong>+ Snapshot</strong> each week.<br>' +
+      'Auto-snapshots run every Friday at 9\u202FPM ET.' +
+      '</div>';
+    return;
+  }
+  var models = [
+    {key:'internal', label:'Int'},
+    {key:'gpt',      label:'GPT'},
+    {key:'gemini',   label:'Gem'},
+    {key:'claude',   label:'Cld'},
+  ];
+  var html = '<div class="table-wrap"><table class="weekly-table">';
+  html += '<thead><tr>';
+  html += '<th rowspan="2">#</th>';
+  html += '<th rowspan="2" style="min-width:120px;text-align:left">Period</th>';
+  html += '<th rowspan="2">Total</th>';
+  html += '<th rowspan="2">+Added</th>';
+  html += '<th rowspan="2">Removed</th>';
+  html += '<th colspan="4" class="grp">&#8594; Done</th>';
+  html += '<th colspan="4" class="grp">&#8594; In Progress</th>';
+  html += '</tr><tr>';
+  models.forEach(function(m){ html += '<th class="sub grp">'+m.label+'</th>'; });
+  models.forEach(function(m){ html += '<th class="sub grp">'+m.label+'</th>'; });
+  html += '</tr></thead><tbody>';
+  WEEKLY_DATA.forEach(function(w) {
+    var isStart = !!w.is_start;
+    var takenAt = '';
+    if (w.taken_at) {
+      try {
+        var d = new Date(w.taken_at);
+        takenAt = d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) +
+                  '\u2002' + d.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+      } catch(e) {}
+    }
+    html += '<tr' + (isStart ? ' class="w-baseline"' : '') + '>';
+    html += '<td class="mono" style="white-space:nowrap">' +
+            (isStart ? '\u25ce' : 'W' + w.week_num) + '</td>';
+    html += '<td>';
+    if (isStart) {
+      html += '<div style="white-space:nowrap;font-weight:600">Start</div>';
+    } else {
+      html += '<div style="white-space:nowrap">' + w.week_label + '</div>';
+    }
+    if (takenAt) html += '<div class="weekly-taken-at">' + takenAt + '</div>';
+    html += '</td>';
+    html += '<td class="mono">' + fmt(w.total_fields) + '</td>';
+    if (isStart) {
+      html += '<td class="mono" style="color:var(--text3)">\u2014</td>';
+      html += '<td class="mono" style="color:var(--text3)">\u2014</td>';
+    } else {
+      var nf = w.new_fields || 0;
+      var rf = w.removed_fields || 0;
+      if (nf > 0) {
+        html += '<td class="mono weekly-cell-pos-new">+' + fmt(nf) + '</td>';
+      } else {
+        html += '<td class="mono" style="color:var(--text3)">\u2014</td>';
+      }
+      if (rf > 0) {
+        html += '<td class="mono weekly-cell-pos-removed">-' + fmt(rf) + '</td>';
+      } else {
+        html += '<td class="mono" style="color:var(--text3)">\u2014</td>';
+      }
+    }
+    models.forEach(function(m) {
+      var v = w.by_model && w.by_model[m.key] ? w.by_model[m.key].to_done : 0;
+      if (isStart) {
+        html += '<td class="mono">' + (v > 0 ? v : '\u2014') + '</td>';
+      } else if (v > 0) {
+        html += '<td class="mono weekly-cell-pos-done">+' + fmt(v) + '</td>';
+      } else {
+        html += '<td class="mono" style="color:var(--text3)">\u2014</td>';
+      }
+    });
+    models.forEach(function(m) {
+      var v = w.by_model && w.by_model[m.key] ? w.by_model[m.key].to_progress : 0;
+      if (isStart) {
+        html += '<td class="mono">' + (v > 0 ? v : '\u2014') + '</td>';
+      } else if (v > 0) {
+        html += '<td class="mono weekly-cell-pos-prog">+' + fmt(v) + '</td>';
+      } else {
+        html += '<td class="mono" style="color:var(--text3)">\u2014</td>';
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+/* ====== SCREEN 2: HISTORY ====== */
+var hSortCol = 'week_num';
+var hSortDir = -1;
+var historyCardTypeFilter = null;
+var historyFiltersInited = false;
+var historySearchHandler = debounce(function() {
+  historyDirty = true;
+  requestHistoryRender(true);
+}, 120);
+
+function initHistoryFilters() {
+  var weekWrap = document.getElementById('ms-h-week');
+  if (!weekWrap) return;
+
+  var weeks = (HISTORY_DATA.weeks || []).slice().sort(function(a, b) {
+    return (b.week_num || 0) - (a.week_num || 0);
+  });
+  new MultiSelect('ms-h-week',
+    weeks.map(function(w) {
+      return {
+        value: String(w.week_num),
+        label: 'W' + w.week_num + ' (' + (w.week_label || '\u2014') + ')'
+      };
+    }),
+    function(){ historyDirty = true; requestHistoryRender(true); }
+  );
+
+  new MultiSelect('ms-h-type', [
+    {value: 'added',          label: 'Added field'},
+    {value: 'removed',        label: 'Removed field'},
+    {value: 'status_changed', label: 'Status changed'}
+  ], function(){ historyDirty = true; requestHistoryRender(true); });
+
+  new MultiSelect('ms-h-model', [
+    {value: 'internal', label: 'Internal Tool'},
+    {value: 'gpt',      label: 'GPT'},
+    {value: 'gemini',   label: 'Gemini'},
+    {value: 'claude',   label: 'Claude'}
+  ], function(){ historyDirty = true; requestHistoryRender(true); });
+
+  if (!historyFiltersInited) {
+    document.getElementById('h-search').addEventListener('input', historySearchHandler);
+    historyFiltersInited = true;
+  }
+}
+
+function getFilteredHistoryChanges(applyCardFilter) {
+  var useCardFilter = applyCardFilter !== false;
+  var weekInst  = _msInstances['ms-h-week'];
+  var typeInst  = _msInstances['ms-h-type'];
+  var modelInst = _msInstances['ms-h-model'];
+  var weekVals  = weekInst  ? weekInst.getValues()  : null;
+  var typeVals  = typeInst  ? typeInst.getValues()  : null;
+  var modelVals = modelInst ? modelInst.getValues() : null;
+  var search   = (document.getElementById('h-search').value || '').trim().toLowerCase();
+
+  return (HISTORY_DATA.changes || []).filter(function(r) {
+    if (weekVals && weekVals.indexOf(String(r.week_num)) === -1) return false;
+    if (typeVals && typeVals.indexOf(r.change_type) === -1) return false;
+    if (useCardFilter && historyCardTypeFilter && r.change_type !== historyCardTypeFilter) return false;
+    if (modelVals && modelVals.indexOf(r.model) === -1) return false;
+    if (search) {
+      var hay = [r.project, r.category, r.doc_type, r.field, r.week_label]
+        .map(function(v){ return String(v || '').toLowerCase(); })
+        .join(' ');
+      if (hay.indexOf(search) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function historySetCardFilter(type) {
+  historyCardTypeFilter = historyCardTypeFilter === type ? null : type;
+  historyDirty = true;
+  requestHistoryRender(true);
+}
+
+function renderHistorySummary(baseRows, visibleRows) {
+  var el = document.getElementById('history-summary');
+  if (!el) return;
+  var addedRows = baseRows.filter(function(r){ return r.change_type === 'added'; }).length;
+  var removedRows = baseRows.filter(function(r){ return r.change_type === 'removed'; }).length;
+  var changedRows = baseRows.filter(function(r){ return r.change_type === 'status_changed'; }).length;
+  var uniqueFields = new Set(baseRows.map(function(r) {
+    return [r.week_num, r.project, r.category, r.doc_type, r.field].join('|');
+  })).size;
+  var addActive = historyCardTypeFilter === 'added' ? ' kpi-card-active' : '';
+  var remActive = historyCardTypeFilter === 'removed' ? ' kpi-card-active' : '';
+  var chgActive = historyCardTypeFilter === 'status_changed' ? ' kpi-card-active' : '';
+
+  el.innerHTML =
+    '<div class="kpi-card c-total"><div class="kpi-label">Visible Changes</div><div class="kpi-value">' + fmt(visibleRows.length) + '</div><div class="kpi-sub">after active filters</div></div>' +
+    '<div class="kpi-card c-prog' + addActive + '" style="cursor:pointer" onclick="historySetCardFilter(\'added\')"><div class="kpi-label">Added Fields</div><div class="kpi-value">' + fmt(addedRows) + '</div><div class="kpi-sub">field rows added</div></div>' +
+    '<div class="kpi-card c-todo' + remActive + '" style="cursor:pointer" onclick="historySetCardFilter(\'removed\')"><div class="kpi-label">Removed Fields</div><div class="kpi-value">' + fmt(removedRows) + '</div><div class="kpi-sub">field rows removed</div></div>' +
+    '<div class="kpi-card c-done' + chgActive + '" style="cursor:pointer" onclick="historySetCardFilter(\'status_changed\')"><div class="kpi-label">Status Transitions</div><div class="kpi-value">' + fmt(changedRows) + '</div><div class="kpi-sub">across ' + fmt(uniqueFields) + ' fields</div></div>';
+}
+
+function renderHistoryTable(rows) {
+  var cols = ['week_num', 'week_label', 'change_type', 'project', 'category', 'doc_type', 'field', 'model', 'from_status', 'to_status'];
+  var labels = ['Week #', 'Period', 'Change', 'Project', 'Category', 'Doc Type', 'Field', 'Model', 'From', 'To'];
+  var leftCols = {week_label:1, project:1, category:1, doc_type:1, field:1};
+
+  var html = '<thead><tr>';
+  cols.forEach(function(c, i) {
+    html += '<th data-col="' + c + '" class="' +
+      (hSortCol === c ? (hSortDir > 0 ? 'sort-asc' : 'sort-desc') : '') +
+      (leftCols[c] ? ' left' : '') +
+      (c === 'doc_type' ? ' doc-type' : '') +
+      (c === 'field' ? ' field-name' : '') +
+      '">' + labels[i] + '</th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  if (!rows.length) {
+    html += '<tr class="empty-row"><td colspan="' + cols.length + '">No history rows match filters</td></tr>';
+  } else {
+    var sorted = rows.slice().sort(function(a, b) {
+      var av = a[hSortCol] != null ? a[hSortCol] : '';
+      var bv = b[hSortCol] != null ? b[hSortCol] : '';
+      if (hSortCol === 'week_num') {
+        av = Number(av);
+        bv = Number(bv);
+      }
+      return av < bv ? -hSortDir : av > bv ? hSortDir : 0;
+    });
+
+    sorted.forEach(function(r) {
+      html += '<tr>';
+      html += '<td class="mono">W' + fmt(r.week_num) + '</td>';
+      html += '<td class="left">' + (r.week_label || '\u2014') + '</td>';
+      html += '<td>' + historyTypeBadge(r.change_type) + '</td>';
+      html += '<td class="left">' + (r.project || '\u2014') + '</td>';
+      html += '<td class="left">' + (r.category || '\u2014') + '</td>';
+      html += '<td class="left doc-type">' + (r.doc_type || '\u2014') + '</td>';
+      html += '<td class="left field-name">' + (r.field || '\u2014') + '</td>';
+      html += '<td>' + modelLabel(r.model) + '</td>';
+      html += '<td>' + badge(r.from_status) + '</td>';
+      html += '<td>' + badge(r.to_status) + '</td>';
+      html += '</tr>';
+    });
+  }
+  html += '</tbody>';
+
+  var tbl = document.getElementById('history-table');
+  tbl.innerHTML = html;
+  tbl.querySelectorAll('thead th').forEach(function(th) {
+    th.addEventListener('click', function() {
+      var c = th.dataset.col;
+      hSortCol === c ? hSortDir *= -1 : (hSortCol = c, hSortDir = 1);
+      renderHistory();
+    });
+  });
+}
+
+function renderHistory() {
+  var baseRows = getFilteredHistoryChanges(false);
+  var rows = getFilteredHistoryChanges(true);
+  renderHistorySummary(baseRows, rows);
+  renderHistoryTable(rows);
+}
+
+async function takeSnapshot() {
+  var btn = document.getElementById('btn-take-snapshot');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving\u2026'; }
+  try {
+    var res = await fetch('/api/snapshot/take', {method: 'POST'});
+    var js  = await res.json();
+    if (js.success) {
+      var sr = await fetch('/api/snapshots');
+      var sj = await sr.json();
+      if (sj.success) { WEEKLY_DATA = sj.weeks || []; renderWeeklyPanel(); }
+    }
+  } catch(e) { console.error('Snapshot error:', e); }
+  if (btn) { btn.disabled = false; btn.textContent = '+ Snapshot'; }
+}
+
+/* ====== SCREEN 2: FIELDS ====== */
+function rowTargetPct(r) {
+  var vals = [r.pct, r.gptPct, r.geminiPct, r.claudePct].filter(function(v){ return v != null; });
+  return vals.length ? Math.max.apply(null, vals) : null;
+}
+
+/* ====== MULTI-SELECT WIDGET ====== */
+var _msInstances = {};
+
+function MultiSelect(containerId, options, onChange) {
+  var wrap = document.getElementById(containerId);
+  if (!wrap) return;
+  // Rebuild safely when data refreshes to avoid stacked duplicate widgets.
+  wrap.innerHTML = '';
+  var selected = new Set();
+  var noneMode = false;
+  var allVals  = options.map(function(o){ return o.value; });
+
+  function getLabel() {
+    if (noneMode) return 'None';
+    if (!selected.size || selected.size === allVals.length) return 'All';
+    if (selected.size === 1) return options.find(function(o){ return selected.has(o.value); }).label;
+    return selected.size + ' selected';
+  }
+  function updateLabel() {
+    var el = wrap.querySelector('.ms-btn-label');
+    if (el) el.textContent = getLabel();
+  }
+  function syncCheckboxes() {
+    var isAll = !noneMode && !selected.size;
+    var allCbEl = wrap.querySelector('.ms-option.ms-all input');
+    if (allCbEl) {
+      allCbEl.checked = isAll;
+      allCbEl.indeterminate = !noneMode && selected.size > 0;
+    }
+    wrap.querySelectorAll('.ms-option:not(.ms-all) input[type="checkbox"]').forEach(function(cb) {
+      cb.checked = isAll ? true : (noneMode ? false : selected.has(cb.value));
+    });
+  }
+
+  // Build DOM once
+  var btn = document.createElement('div');
+  btn.className = 'ms-btn';
+  btn.innerHTML = '<span class="ms-btn-label">All</span><span class="ms-btn-arrow">&#9660;</span>';
+
+  var panel = document.createElement('div');
+  panel.className = 'ms-panel';
+
+  var searchWrap = document.createElement('div');
+  searchWrap.className = 'ms-search';
+  var searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search...';
+  searchWrap.appendChild(searchInput);
+
+  var optionsDiv = document.createElement('div');
+  optionsDiv.className = 'ms-options';
+
+  var allLabel = document.createElement('label');
+  allLabel.className = 'ms-option ms-all';
+  var allCb = document.createElement('input');
+  allCb.type = 'checkbox'; allCb.checked = true;
+  allLabel.appendChild(allCb);
+  allLabel.appendChild(document.createTextNode('\u00a0All'));
+  optionsDiv.appendChild(allLabel);
+
+  options.forEach(function(opt) {
+    var lbl = document.createElement('label');
+    lbl.className = 'ms-option';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.value = opt.value; cb.checked = true;
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode('\u00a0' + opt.label));
+    optionsDiv.appendChild(lbl);
+  });
+
+  var clearDiv = document.createElement('div');
+  clearDiv.className = 'ms-clear';
+  clearDiv.textContent = '\u2715 Clear';
+
+  panel.appendChild(searchWrap);
+  panel.appendChild(optionsDiv);
+  panel.appendChild(clearDiv);
+  wrap.appendChild(btn);
+  wrap.appendChild(panel);
+
+  // Button: toggle open
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    // Keep only one filter dropdown open at a time.
+    document.querySelectorAll('.ms-wrap.open').forEach(function(el) {
+      if (el !== wrap) el.classList.remove('open');
+    });
+    var isOpen = wrap.classList.toggle('open');
+    if (isOpen) {
+      setTimeout(function() {
+        document.addEventListener('click', function handler(e) {
+          if (!wrap.contains(e.target)) {
+            wrap.classList.remove('open');
+            document.removeEventListener('click', handler);
+          }
+        });
+      }, 0);
+    }
+  });
+
+  // Prevent panel clicks from reaching document
+  panel.addEventListener('click', function(e) { e.stopPropagation(); });
+
+  // All checkbox
+  allCb.addEventListener('change', function() {
+    if (!noneMode && !selected.size) {
+      // All was active -> switch to None
+      noneMode = true;
+      selected = new Set();
+    } else {
+      // None/partial active -> switch to All
+      noneMode = false;
+      selected = new Set();
+    }
+    syncCheckboxes();
+    updateLabel();
+    onChange();
+  });
+
+  // Individual checkboxes
+  optionsDiv.querySelectorAll('.ms-option:not(.ms-all) input[type="checkbox"]').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      if (noneMode) {
+        noneMode = false;
+      } else if (!selected.size) {
+        // expand "All"
+        selected = new Set(allVals);
+      }
+      if (cb.checked) selected.add(cb.value); else selected.delete(cb.value);
+      if (selected.size === allVals.length) {
+        // collapse to "All"
+        selected = new Set();
+        noneMode = false;
+      } else if (selected.size === 0) {
+        // explicit none-selected state
+        noneMode = true;
+      }
+      syncCheckboxes();
+      updateLabel();
+      onChange();
+    });
+  });
+
+  // Search filter
+  searchInput.addEventListener('input', function() {
+    var q = searchInput.value.toLowerCase();
+    optionsDiv.querySelectorAll('.ms-option:not(.ms-all)').forEach(function(opt) {
+      opt.style.display = opt.textContent.trim().toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+    });
+  });
+
+  // Clear
+  clearDiv.addEventListener('click', function() {
+    noneMode = false;
+    selected = new Set();
+    syncCheckboxes();
+    updateLabel();
+    onChange();
+  });
+
+  this.getValues = function() {
+    if (noneMode) return [];
+    if (!selected.size || selected.size === allVals.length) return null;
+    return Array.from(selected);
+  };
+  this._getAllVals = function() { return allVals; };
+  this._getSelected = function() { return selected; };
+
+  _msInstances[containerId] = this;
+}
+
+function getFilteredFields() {
+  var projInst     = _msInstances['ms-f-project'];
+  var catInst      = _msInstances['ms-f-category'];
+  var priorityInst = _msInstances['ms-f-priority'];
+  var statusInst   = _msInstances['ms-f-status'];
+  var modelInst    = _msInstances['ms-f-model'];
+  var search       = document.getElementById('f-search').value.trim().toLowerCase();
+
+  var projVals     = projInst     ? projInst.getValues()     : null;
+  var catVals      = catInst      ? catInst.getValues()      : null;
+  var priorityVals = priorityInst ? priorityInst.getValues() : null;
+  var statusVals   = statusInst   ? statusInst.getValues()   : null;
+  var modelVals    = modelInst    ? modelInst.getValues()    : null;
+
+  var rows = DATA.fields.filter(function(r) {
+    if (projVals     && projVals.indexOf(r.project)  === -1) return false;
+    if (catVals      && catVals.indexOf(r.category)  === -1) return false;
+    if (priorityVals && priorityVals.indexOf(String(r.priority)) === -1) return false;
+    if (statusVals) {
+      if (modelVals) {
+        var matches = modelVals.some(function(mv) { return statusVals.indexOf(normalizeStatus(r[mv])) !== -1; });
+        if (!matches) return false;
+      } else {
+        if (statusVals.indexOf(fieldStatus(r)) === -1) return false;
+      }
+    } else if (modelVals) {
+      // model filter without status: keep all statuses for selected models (no-op on row set)
+    }
+    if (search && r.docTypeL.indexOf(search) === -1 && r.fieldL.indexOf(search) === -1) return false;
+    return true;
+  });
+  return rows;
+}
+
+function renderFieldsOverview(rows) {
+  var el = document.getElementById('fields-overview');
+  if (!el) return;
+  var rowsNoComp = rows.filter(function(r){ return r.project !== 'Complience test'; });
+  function pctAtLeast90(subset, predicate) {
+    if (!subset.length) return null;
+    var cnt = subset.filter(predicate).length;
+    return (cnt / subset.length * 100).toFixed(1);
+  }
+  function is90(v) {
+    return v != null && v !== '' && Number(v) >= 90;
+  }
+  var intHitPct    = pctAtLeast90(rows,       function(r){ return is90(r.pct); });
+  var gptHitPct    = pctAtLeast90(rowsNoComp, function(r){ return is90(r.gptPct); });
+  var geminiHitPct = pctAtLeast90(rowsNoComp, function(r){ return is90(r.geminiPct); });
+  var claudeHitPct = pctAtLeast90(rowsNoComp, function(r){ return is90(r.claudePct); });
+  var goalHitPct   = pctAtLeast90(rows, function(r){
+    return is90(r.pct) || is90(r.gptPct) || is90(r.geminiPct) || is90(r.claudePct);
+  });
+  var cards = [
+    { label: 'Internal Tool %', value: intHitPct,    sub: 'rows with >=90%: ' + fmt(rows.length) + ' total', target: false, cls: 'fov-c1' },
+    { label: 'GPT %',           value: gptHitPct,    sub: 'rows with >=90%: ' + fmt(rowsNoComp.length) + ' total', target: false, cls: 'fov-c2' },
+    { label: 'Gemini %',        value: geminiHitPct, sub: 'rows with >=90%: ' + fmt(rowsNoComp.length) + ' total', target: false, cls: 'fov-c3' },
+    { label: 'Claude %',        value: claudeHitPct, sub: 'rows with >=90%: ' + fmt(rowsNoComp.length) + ' total', target: false, cls: 'fov-c4' },
+    { label: 'Goal — All fields with 90%+ rate', value: goalHitPct, sub: 'at least one method >=90%', target: true, cls: '' }
+  ];
+  var html = '<div class="fov-cards">';
+  cards.forEach(function(c) {
+    var extra = (c.target ? ' fov-target' : '') + (c.cls ? ' ' + c.cls : '');
+    html += '<div class="fov-card' + extra + '">';
+    html += '<div class="fov-label">' + c.label + '</div>';
+    html += '<div class="fov-value">' + (c.value != null ? c.value + '%' : '\u2014') + '</div>';
+    html += '<div class="fov-sub">' + c.sub + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+var fSortCol = null, fSortDir = 1;
+function renderFieldsTable(rows) {
+  var cols   = ['project','category','docType','field','priority','targetPct','internal','gpt','gemini','claude','pct','gptPct','geminiPct','claudePct'];
+  var labels = ['Project','Category','Doc Type','Field','Priority','Goal','Internal Tool','GPT','Gemini','Claude','Int. %','GPT %','Gemini %','Claude %'];
+  var leftCols = {'project':1,'category':1,'docType':1,'field':1};
+  var html = '<thead><tr>';
+  cols.forEach(function(c,i){ html += '<th data-col="'+c+'" class="'+(fSortCol===c?(fSortDir>0?'sort-asc':'sort-desc'):'')+(leftCols[c]?' left':'')+'">'+labels[i]+'</th>'; });
+  html += '</tr></thead><tbody>';
+  if (!rows.length) {
+    html += '<tr class="empty-row"><td colspan="'+cols.length+'">No records match filters</td></tr>';
+  } else {
+    var sorted = rows.slice();
+    if (fSortCol) sorted.sort(function(a,b){
+      var av = fSortCol === 'targetPct' ? rowTargetPct(a) : a[fSortCol];
+      var bv = fSortCol === 'targetPct' ? rowTargetPct(b) : b[fSortCol];
+      av = av != null ? av : '';
+      bv = bv != null ? bv : '';
+      return av < bv ? -fSortDir : av > bv ? fSortDir : 0;
+    });
+    sorted.forEach(function(r) {
+      var tp = rowTargetPct(r);
+      html += '<tr>';
+      html += '<td class="left">'+r.project+'</td>';
+      html += '<td class="left">'+r.category+'</td>';
+      html += '<td class="doctype-cell left">'+r.docType+'</td>';
+      html += '<td class="field-cell left">'+r.field+'</td>';
+      html += '<td>'+(r.priority != null ? priorityBadge(r.priority) : '\u2014')+'</td>';
+      html += '<td class="mono" style="font-weight:600'+(tp != null && tp >= 90 ? ';background:#d4f0e0;color:#1a7a45' : '')+'">'+(tp != null ? tp.toFixed(1)+'%' : '\u2014')+'</td>';
+      html += '<td>'+badge(r.internal)+'</td>';
+      html += '<td>'+badge(r.gpt)+'</td>';
+      html += '<td>'+badge(r.gemini)+'</td>';
+      html += '<td>'+badge(r.claude)+'</td>';
+      html += '<td class="mono">'+(r.pct != null ? r.pct+'%' : '\u2014')+'</td>';
+      html += '<td class="mono">'+(r.gptPct != null ? r.gptPct+'%' : '\u2014')+'</td>';
+      html += '<td class="mono">'+(r.geminiPct != null ? r.geminiPct+'%' : '\u2014')+'</td>';
+      html += '<td class="mono">'+(r.claudePct != null ? r.claudePct+'%' : '\u2014')+'</td>';
+      html += '</tr>';
+    });
+  }
+  html += '</tbody>';
+  var tbl = document.getElementById('fields-table');
+  tbl.innerHTML = html;
+  tbl.querySelectorAll('thead th').forEach(function(th) {
+    th.addEventListener('click', function() {
+      var c = th.dataset.col;
+      fSortCol === c ? fSortDir *= -1 : (fSortCol = c, fSortDir = 1);
+      renderFields();
+    });
+  });
+}
+
+function renderFields() {
+  var rows = getFilteredFields();
+  renderFieldsOverview(rows);
+  renderFieldsTable(rows);
+}
+
+var fieldsFiltersInited = false;
+var fieldsSearchHandler = debounce(function() {
+  fieldsDirty = true;
+  requestFieldsRender(true);
+}, 120);
+
+function initFieldsFilters() {
+  var projects   = unique(DATA.fields, 'project');
+  var categories = unique(DATA.fields, 'category');
+  var priorities = [...new Set(DATA.fields.map(function(r){ return r.priority; }).filter(function(v){ return v != null; }))].sort(function(a,b){ return a-b; });
+
+  new MultiSelect('ms-f-project',
+    projects.map(function(v){ return {value: v, label: v}; }), function(){ fieldsDirty = true; requestFieldsRender(true); });
+  new MultiSelect('ms-f-category',
+    categories.map(function(v){ return {value: v, label: v}; }), function(){ fieldsDirty = true; requestFieldsRender(true); });
+  new MultiSelect('ms-f-priority',
+    priorities.map(function(p){ return {value: String(p), label: 'P'+p}; }), function(){ fieldsDirty = true; requestFieldsRender(true); });
+  new MultiSelect('ms-f-status', [
+    {value: 'Done',        label: 'Done'},
+    {value: 'In Progress', label: 'In Progress'},
+    {value: 'To Do',       label: 'To Do'}
+  ], function(){ fieldsDirty = true; requestFieldsRender(true); });
+  new MultiSelect('ms-f-model', [
+    {value: 'internal', label: 'Internal Tool'},
+    {value: 'gpt',      label: 'GPT'},
+    {value: 'gemini',   label: 'Gemini'},
+    {value: 'claude',   label: 'Claude'}
+  ], function(){ fieldsDirty = true; requestFieldsRender(true); });
+
+  if (!fieldsFiltersInited) {
+    document.getElementById('f-search').addEventListener('input', fieldsSearchHandler);
+    fieldsFiltersInited = true;
+  }
+}
+
+/* ====== SCREEN 3: AUTO-TESTS ====== */
+var atSortCol = null, atSortDir = 1;
+var atPriorityFilter = null;
+var atStatusFilter = null;
+
+function getFilteredAutoTests() {
+  var projInst = _msInstances['ms-at-project'];
+  var catInst  = _msInstances['ms-at-category'];
+  var projVals = projInst ? projInst.getValues() : null;
+  var catVals  = catInst ? catInst.getValues() : null;
+  var search  = document.getElementById('at-search').value.trim().toLowerCase();
+  var rows = DATA.autoTests.filter(function(r) {
+    return (!projVals || projVals.indexOf(r.project) !== -1) &&
+           (!catVals  || catVals.indexOf(r.category) !== -1);
+  });
+  if (search) rows = rows.filter(function(r){ return r.docTypeL.indexOf(search) !== -1; });
+  if (atPriorityFilter != null) rows = rows.filter(function(r){ return r.priority === atPriorityFilter; });
+  if (atStatusFilter === '100') rows = rows.filter(function(r){ return r.docs100 === 'Yes'; });
+  else if (atStatusFilter != null) rows = rows.filter(function(r){ return normalizeStatus(r.status) === atStatusFilter; });
+  return rows;
+}
+
+function getBaseAutoTests() {
+  // Returns rows with project/category/search filters but WITHOUT priority filter
+  var projInst = _msInstances['ms-at-project'];
+  var catInst  = _msInstances['ms-at-category'];
+  var projVals = projInst ? projInst.getValues() : null;
+  var catVals  = catInst ? catInst.getValues() : null;
+  var search  = document.getElementById('at-search').value.trim().toLowerCase();
+  var rows = DATA.autoTests.filter(function(r) {
+    return (!projVals || projVals.indexOf(r.project) !== -1) &&
+           (!catVals  || catVals.indexOf(r.category) !== -1);
+  });
+  if (search) rows = rows.filter(function(r){ return r.docTypeL.indexOf(search) !== -1; });
+  return rows;
+}
+
+function renderAutoTests() {
+  var rows  = getFilteredAutoTests();
+  var baseRows = getBaseAutoTests();
+  // KPI counts always from unfiltered-by-status base (respect priority filter)
+  var kpiRows = atPriorityFilter != null ? baseRows.filter(function(r){ return r.priority === atPriorityFilter; }) : baseRows;
+  var total = kpiRows.length;
+  var done  = kpiRows.filter(function(r){ return normalizeStatus(r.status)==='Done'; }).length;
+  var todo  = kpiRows.filter(function(r){ return normalizeStatus(r.status)==='To Do'; }).length;
+  var reval = kpiRows.filter(function(r){ return normalizeStatus(r.status)==='Revalidated'; }).length;
+  var has100= kpiRows.filter(function(r){ return r.docs100==='Yes'; }).length;
+
+  function cardSel(key) { return atStatusFilter === key ? ' kpi-card-active' : ''; }
+  function cardClick(key) { return ' style="cursor:pointer" onclick="atFilterStatus(\''+key+'\')"'; }
+  document.getElementById('at-kpis').innerHTML =
+    '<div class="kpi-card c-total"><div class="kpi-label">Total Documents</div><div class="kpi-value">'+fmt(total)+'</div></div>'+
+    '<div class="kpi-card c-prog'+cardSel('100')+'"'+cardClick('100')+'><div class="kpi-label">100 Docs Set</div><div class="kpi-value">'+fmt(has100)+'</div><div class="kpi-sub">docs with 100-set</div></div>'+
+    '<div class="kpi-card c-todo'+cardSel('To Do')+'"'+cardClick('To Do')+'><div class="kpi-label">To Do</div><div class="kpi-value">'+fmt(todo)+'</div><div class="kpi-sub">'+pct(todo,total)+'%</div></div>'+
+    '<div class="kpi-card c-reval'+cardSel('Revalidated')+'"'+cardClick('Revalidated')+'><div class="kpi-label">Revalidated</div><div class="kpi-value">'+fmt(reval)+'</div><div class="kpi-sub">'+pct(reval,total)+'%</div></div>'+ 
+    '<div class="kpi-card c-done'+cardSel('Done')+'"'+cardClick('Done')+'><div class="kpi-label">Done<span class="kpi-info" onclick="event.stopPropagation()"><span class="kpi-info-icon">&#9432;</span><div class="kpi-info-popup">Done is counted from the Status column (value: Done).</div></span></div><div class="kpi-value">'+fmt(done)+'</div><div class="kpi-sub">'+pct(done,total)+'%</div></div>';
+
+  var priorities = [...new Set(baseRows.map(function(r){return r.priority;}).filter(function(v){return v != null;}))].sort(function(a,b){return a-b;});
+  var pt = '<thead><tr><th>Priority</th><th>Total</th><th class="c100">100 Docs Set</th><th>To Do</th><th>Revalidated</th><th>Done</th></tr></thead><tbody>';
+  if (!priorities.length) pt += '<tr class="empty-row"><td colspan="6">No priority data</td></tr>';
+  priorities.forEach(function(p) {
+    var pr  = baseRows.filter(function(r){return r.priority===p;});
+    var d   = pr.filter(function(r){return normalizeStatus(r.status)==='Done';}).length;
+    var t   = pr.filter(function(r){return normalizeStatus(r.status)==='To Do';}).length;
+    var rv  = pr.filter(function(r){return normalizeStatus(r.status)==='Revalidated';}).length;
+    var s100= pr.filter(function(r){return r.docs100==='Yes';}).length;
+    var sel = atPriorityFilter === p ? ' class="row-selected"' : '';
+    pt += '<tr'+sel+' style="cursor:pointer" onclick="atFilterPriority('+p+')">';
+    pt += '<td style="padding:7px 14px">'+priorityBadge(p)+'</td>';
+    pt += '<td class="mono">'+fmt(pr.length)+'</td>';
+    pt += '<td class="mono" style="color:var(--prog)">'+fmt(s100)+'</td>';
+    pt += '<td class="mono" style="color:var(--todo)">'+fmt(t)+'</td>';
+    pt += '<td class="mono" style="color:var(--accent)">'+fmt(rv)+'</td>';
+    pt += '<td class="mono" style="color:var(--done)">'+fmt(d)+'</td>';
+    pt += '</tr>';
+  });
+  document.getElementById('at-priority-table').innerHTML = pt + '</tbody>';
+
+  var cols   = ['project','category','docType','priority','status','docs100','target'];
+  var labels = ['Project','Category','Doc Type','Priority','Status','100 Docs Set','Target #'];
+  var atLeftCols = {'project':1,'category':1,'docType':1};
+  var html = '<thead><tr>';
+  cols.forEach(function(c,i){ html += '<th data-col="'+c+'" class="'+(atSortCol===c?(atSortDir>0?'sort-asc':'sort-desc'):'')+(atLeftCols[c]?' left':'')+'">' + labels[i]+'</th>'; });
+  html += '</tr></thead><tbody>';
+  if (!rows.length) {
+    html += '<tr class="empty-row"><td colspan="'+cols.length+'">No records match filters</td></tr>';
+  } else {
+    var sorted = rows.slice();
+    if (atSortCol) sorted.sort(function(a,b){
+      var av = a[atSortCol] != null ? a[atSortCol] : '';
+      var bv = b[atSortCol] != null ? b[atSortCol] : '';
+      return av < bv ? -atSortDir : av > bv ? atSortDir : 0;
+    });
+    sorted.forEach(function(r) {
+      html += '<tr>';
+      html += '<td class="left">'+r.project+'</td>';
+      html += '<td class="left">'+r.category+'</td>';
+      html += '<td class="left">'+r.docType+'</td>';
+      html += '<td>'+(r.priority != null ? priorityBadge(r.priority) : '\u2014')+'</td>';
+      html += '<td>'+badge(r.status)+'</td>';
+      html += '<td class="mono">'+r.docs100+'</td>';
+      html += '<td class="mono">'+(r.target != null ? r.target : '\u2014')+'</td>';
+      html += '</tr>';
+    });
+  }
+  html += '</tbody>';
+  var tbl = document.getElementById('at-table');
+  tbl.innerHTML = html;
+  tbl.querySelectorAll('thead th').forEach(function(th) {
+    th.addEventListener('click', function() {
+      var c = th.dataset.col;
+      atSortCol===c ? atSortDir*=-1 : (atSortCol=c, atSortDir=1);
+      renderAutoTests();
+    });
+  });
+}
+
+function atFilterPriority(p) {
+  atPriorityFilter = atPriorityFilter === p ? null : p;
+  autoTestsDirty = true;
+  requestAutoTestsRender(true);
+}
+
+function atFilterStatus(key) {
+  atStatusFilter = atStatusFilter === key ? null : key;
+  autoTestsDirty = true;
+  requestAutoTestsRender(true);
+}
+
+var atFiltersInited = false;
+var autoTestsSearchHandler = debounce(function() {
+  atPriorityFilter = null;
+  atStatusFilter = null;
+  autoTestsDirty = true;
+  requestAutoTestsRender(true);
+}, 120);
+
+function initAutoTestsFilters() {
+  new MultiSelect('ms-at-project',
+    unique(DATA.autoTests, 'project').map(function(v){ return {value: v, label: v}; }),
+    function(){ atPriorityFilter = null; atStatusFilter = null; autoTestsDirty = true; requestAutoTestsRender(true); }
+  );
+  new MultiSelect('ms-at-category',
+    unique(DATA.autoTests, 'category').map(function(v){ return {value: v, label: v}; }),
+    function(){ atPriorityFilter = null; atStatusFilter = null; autoTestsDirty = true; requestAutoTestsRender(true); }
+  );
+  if (!atFiltersInited) {
+    document.getElementById('at-search').addEventListener('input', autoTestsSearchHandler);
+    atFiltersInited = true;
+  }
+}
+
+/* ====== FAQ ====== */
+function faqToggle(header) {
+  header.closest('.faq-card').classList.toggle('open');
+}
+
+/* ====== NAV ====== */
+document.querySelectorAll('.nav-tab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    if (tab.classList.contains('active')) return;
+
+    // Update the tab indicator immediately for responsive click feedback.
+    document.querySelectorAll('.nav-tab.active').forEach(function(t){ t.classList.remove('active'); });
+    tab.classList.add('active');
+
+    var screen = tab.dataset.screen;
+    activeScreen = screen;
+
+    // Move screen switch and render work to next frame so indicator paint is not delayed.
+    requestAnimationFrame(function() {
+      document.querySelectorAll('.screen.active').forEach(function(s){ s.classList.remove('active'); });
+      document.getElementById('screen-'+screen).classList.add('active');
+      if (screen === 'score')     requestScoreRender();
+      if (screen === 'history')   requestHistoryRender(false);
+      if (screen === 'fields')    requestFieldsRender(false);
+      if (screen === 'autotests') requestAutoTestsRender(false);
+    });
+  });
+});
+
+/* ====== INIT ====== */
+loadAllData();
+</script>
+</body>
+</html>
