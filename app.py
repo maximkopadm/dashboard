@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_file
+from flask import Flask, jsonify, send_file, request
 import pandas as pd
 from flask_cors import CORS
 import os
@@ -15,10 +15,16 @@ except ImportError:
 
 app = Flask(__name__)
 CORS(app)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB upload limit
 warnings.filterwarnings('ignore')
+
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({'error': 'File too large (max 50 MB)'}), 413
 
 # ---- Weekly snapshot helpers ----
 SNAPSHOT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'snapshots.json')
+DATA_FILE     = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data.xlsm')
 _BASELINE_SUNDAY = date(2026, 3, 15)   # Week 0: Mar 15–21 2026
 _MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -43,9 +49,9 @@ def _norm_status(s):
     return 'To Do'
 
 def _is_compliance_test_key(k):
-    """Return True when snapshot key belongs to Compliance/Complience test project."""
+    """Return True when snapshot key belongs to a Compliance/Complience test project."""
     project = str(k or '').split('|', 1)[0].strip().lower()
-    return project in ('compliance test', 'complience test')
+    return 'test' in project and project.startswith('compli')
 
 def _parse_snapshot_key(k):
     """Split a snapshot key into Project/Category/Document type/Field parts."""
@@ -69,16 +75,18 @@ def _load_snaps():
     return []
 
 def _save_snaps(snaps):
-    with open(SNAPSHOT_FILE, 'w', encoding='utf-8') as fh:
+    tmp = SNAPSHOT_FILE + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as fh:
         json.dump(snaps, fh, ensure_ascii=False, indent=2)
+    os.replace(tmp, SNAPSHOT_FILE)
 
 def take_snapshot():
     """Capture the current Fields sheet state into snapshots.json."""
     try:
-        if not os.path.exists('data.xlsm'):
-            print('Snapshot skipped: data.xlsm not found')
+        if not os.path.exists(DATA_FILE):
+            print('Snapshot skipped: data.xlsm not found at', DATA_FILE)
             return
-        df = pd.read_excel('data.xlsm', sheet_name='Fields')
+        df = pd.read_excel(DATA_FILE, sheet_name='Fields')
         df = df.where(pd.notna(df), '')
         states = {}
         for _, row in df.iterrows():
@@ -117,9 +125,9 @@ def take_snapshot():
 def take_start_snapshot():
     """Save a named 'Start' baseline snapshot (week_num=-1)."""
     try:
-        if not os.path.exists('data.xlsm'):
+        if not os.path.exists(DATA_FILE):
             return
-        df = pd.read_excel('data.xlsm', sheet_name='Fields')
+        df = pd.read_excel(DATA_FILE, sheet_name='Fields')
         df = df.where(pd.notna(df), '')
         states = {}
         for _, row in df.iterrows():
@@ -155,7 +163,25 @@ def take_start_snapshot():
         print(f'Start snapshot error: {e}')
 
 def _scheduler():
-    """Daemon thread: take a snapshot every Friday at 21:00 ET."""
+    """Daemon thread: take a snapshot every Friday at 21:00 ET.
+    Also takes a catch-up snapshot on startup if this week's snapshot was missed."""
+    # --- Catch-up: if server was down when Friday 9 PM passed, snapshot now ---
+    try:
+        tz  = ZoneInfo('America/New_York') if ZoneInfo else None
+        now = datetime.now(tz) if tz else datetime.utcnow()
+        today = now.date()
+        current_week = _week_num(today)
+        snaps = _load_snaps()
+        existing_weeks = {s['week_num'] for s in snaps if not s.get('is_start')}
+        # It's past Friday 9 PM this week (Fri after 21:00 or Sat/Sun) and no snapshot yet
+        day_of_week = now.weekday()  # Mon=0 … Fri=4, Sat=5, Sun=6
+        past_fri_cutoff = (day_of_week == 4 and now.hour >= 21) or day_of_week in (5, 6)
+        if past_fri_cutoff and current_week not in existing_weeks:
+            print('Catch-up snapshot: missed Friday auto-snapshot, taking now...')
+            take_snapshot()
+    except Exception as e:
+        print(f'Catch-up snapshot error: {e}')
+
     while True:
         try:
             tz = ZoneInfo('America/New_York') if ZoneInfo else None
@@ -192,11 +218,13 @@ def convert_to_serializable(obj):
 def get_data():
     """Read Excel file and return data as JSON"""
     try:
+        # Always read fresh from disk
         # Try .xlsm first, then .xlsx
-        if os.path.exists('data.xlsm'):
-            df = pd.read_excel('data.xlsm', sheet_name='Fields')
-        elif os.path.exists('data.xlsx'):
-            df = pd.read_excel('data.xlsx', sheet_name=0)
+        data_xlsx = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data.xlsx')
+        if os.path.exists(DATA_FILE):
+            df = pd.read_excel(DATA_FILE, sheet_name='Fields')
+        elif os.path.exists(data_xlsx):
+            df = pd.read_excel(data_xlsx, sheet_name=0)
         else:
             return jsonify({'error': 'data.xlsm or data.xlsx not found'}), 404
         
@@ -218,11 +246,13 @@ def get_data():
                     cleaned_row[key] = ""
             cleaned_data.append(cleaned_row)
         
-        return jsonify({
+        resp = jsonify({
             'success': True,
             'count': len(cleaned_data),
             'data': cleaned_data
         })
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
     except Exception as e:
         print(f"Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -231,10 +261,11 @@ def get_data():
 def get_columns():
     """Get column names from Excel"""
     try:
-        if os.path.exists('data.xlsm'):
-            df = pd.read_excel('data.xlsm', sheet_name='Fields')
-        elif os.path.exists('data.xlsx'):
-            df = pd.read_excel('data.xlsx', sheet_name=0)
+        data_xlsx = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data.xlsx')
+        if os.path.exists(DATA_FILE):
+            df = pd.read_excel(DATA_FILE, sheet_name='Fields')
+        elif os.path.exists(data_xlsx):
+            df = pd.read_excel(data_xlsx, sheet_name=0)
         else:
             return jsonify({'error': 'Excel file not found'}), 404
         
@@ -247,10 +278,10 @@ def get_columns():
 def get_autotests():
     """Read Autotests sheet and return data as JSON"""
     try:
-        if not os.path.exists('data.xlsm'):
+        if not os.path.exists(DATA_FILE):
             return jsonify({'error': 'data.xlsm not found'}), 404
 
-        df = pd.read_excel('data.xlsm', sheet_name='Autotests')
+        df = pd.read_excel(DATA_FILE, sheet_name='Autotests')
 
         # Drop unnamed columns
         df = df.loc[:, ~df.columns.str.startswith('Unnamed')]
@@ -297,9 +328,9 @@ def get_snapshots():
         non_compliance_keys = [k for k in st.keys() if not _is_compliance_test_key(k)]
         for m in ('internal', 'gpt', 'gemini', 'claude'):
             by_model[m] = {
-                # Start row: exclude Compliance Test from Done
+                # Start row: exclude Compliance Test from Done and In Progress
                 'to_done':     sum(1 for k in non_compliance_keys if st.get(k, {}).get(m) == 'Done'),
-                'to_progress': sum(1 for v in st.values() if v.get(m) == 'In Progress'),
+                'to_progress': sum(1 for k in non_compliance_keys if st.get(k, {}).get(m) == 'In Progress'),
             }
         result.append({
             'week_num':     -1,
@@ -439,24 +470,107 @@ def get_history():
 
     return jsonify({'success': True, 'weeks': weeks, 'changes': changes})
 
+_PROTECTED_ACTIONS = {'upload', 'download'}
+_ACTION_PW = '1x2c3v'
+
+@app.route('/api/auth', methods=['POST'])
+def check_auth():
+    """Verify password for protected actions. Returns a short-lived token."""
+    import hmac, hashlib, time as _time
+    data = request.get_json(force=True, silent=True) or {}
+    action = data.get('action', '')
+    password = data.get('password', '')
+    if action not in _PROTECTED_ACTIONS:
+        return jsonify({'success': False, 'error': 'Unknown action'}), 400
+    if not hmac.compare_digest(password, _ACTION_PW):
+        return jsonify({'success': False, 'error': 'Incorrect password'}), 403
+    # Simple time-based token: action|timestamp (good for 5 min)
+    ts = str(int(_time.time()))
+    raw = f'{action}|{ts}|{_ACTION_PW}'
+    token = hmac.new(b'dashboard-secret', raw.encode(), hashlib.sha256).hexdigest()[:16]
+    return jsonify({'success': True, 'token': token, 'ts': ts, 'action': action})
+
+def _verify_token(action, token, ts):
+    """Returns True if token is valid and < 5 minutes old."""
+    import hmac, hashlib, time as _time
+    try:
+        if abs(int(_time.time()) - int(ts)) > 300:
+            return False
+        raw = f'{action}|{ts}|{_ACTION_PW}'
+        expected = hmac.new(b'dashboard-secret', raw.encode(), hashlib.sha256).hexdigest()[:16]
+        return hmac.compare_digest(token, expected)
+    except Exception:
+        return False
+
+@app.route('/api/download-excel', methods=['GET'])
+def download_excel():
+    """Serve the current data.xlsm for download (requires auth token)."""
+    token = request.args.get('token', '')
+    ts    = request.args.get('ts', '')
+    if not _verify_token('download', token, ts):
+        return jsonify({'error': 'Unauthorized'}), 403
+    if not os.path.exists(DATA_FILE):
+        return jsonify({'error': 'data.xlsm not found on server'}), 404
+    return send_file(DATA_FILE, as_attachment=True, download_name='data.xlsm',
+                     mimetype='application/vnd.ms-excel.sheet.macroEnabled.12')
+
+@app.route('/api/upload-excel', methods=['POST'])
+def upload_excel():
+    """Accept an uploaded Excel file and replace data.xlsm on the server (requires auth token)."""
+    try:
+        token = request.form.get('token', '')
+        ts    = request.form.get('ts', '')
+        if not _verify_token('upload', token, ts):
+            return jsonify({'error': 'Unauthorized'}), 403
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        f = request.files['file']
+        if not f.filename:
+            return jsonify({'error': 'Empty filename'}), 400
+        ext = os.path.splitext(f.filename)[1].lower()
+        if ext not in ('.xlsm', '.xlsx'):
+            return jsonify({'error': 'Only .xlsm or .xlsx files are accepted'}), 400
+        tmp_path = DATA_FILE + '.tmp'
+        f.save(tmp_path)
+        if os.path.exists(DATA_FILE):
+            try:
+                os.chmod(DATA_FILE, 0o644)
+            except OSError:
+                pass
+        os.replace(tmp_path, DATA_FILE)
+        return jsonify({'success': True, 'filename': f.filename})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/snapshot/take', methods=['POST'])
 def manual_snapshot():
     """Manually trigger a snapshot for the current week."""
-    take_snapshot()
-    snaps = _load_snaps()
-    return jsonify({'success': True, 'total_snapshots': len(snaps)})
+    try:
+        if not os.path.exists(DATA_FILE):
+            return jsonify({'success': False, 'error': f'data.xlsm not found at {DATA_FILE}'}), 500
+        take_snapshot()
+        snaps = _load_snaps()
+        return jsonify({'success': True, 'total_snapshots': len(snaps)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/snapshot/take-start', methods=['POST'])
 def manual_start_snapshot():
     """Save the 'Start' baseline snapshot."""
-    take_start_snapshot()
-    snaps = _load_snaps()
-    return jsonify({'success': True, 'total_snapshots': len(snaps)})
+    try:
+        if not os.path.exists(DATA_FILE):
+            return jsonify({'success': False, 'error': f'data.xlsm not found at {DATA_FILE}'}), 500
+        take_start_snapshot()
+        snaps = _load_snaps()
+        return jsonify({'success': True, 'total_snapshots': len(snaps)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/')
 def index():
     """Serve the frontend"""
-    response = send_file('index.html')
+    index_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'index.html')
+    response = send_file(index_file)
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
@@ -464,5 +578,5 @@ def index():
 
 if __name__ == '__main__':
     print("Starting Flask server...")
-    print("Visit http://localhost:5000 in your browser")
-    app.run(debug=False, port=5000, host='localhost')
+    print("Visit http://localhost:5000 or http://10.230.0.21:5000 in your browser")
+    app.run(debug=False, port=5000, host='0.0.0.0')

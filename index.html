@@ -94,8 +94,144 @@
     font-family: var(--mono);
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
-  .btn-refresh:hover { background: var(--bg4); color: var(--text); }
+  .btn-refresh:hover:not(:disabled) { background: var(--bg4); color: var(--text); }
+  .btn-refresh:disabled { opacity: 0.6; cursor: not-allowed; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .btn-refresh .refresh-icon { display: inline-block; }
+  .btn-refresh.loading .refresh-icon { animation: spin 0.7s linear infinite; }
+  .btn-upload {
+    background: var(--accent);
+    border: 1px solid var(--accent2);
+    border-radius: 6px;
+    color: #fff;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-family: var(--mono);
+    cursor: pointer;
+    transition: background 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-upload:hover:not(:disabled) { background: var(--accent2); }
+  .btn-upload:disabled { opacity: 0.6; cursor: not-allowed; }
+  /* Upload modal overlay */
+  .upload-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+  }
+  .upload-modal-overlay.open { display: flex; }
+  .upload-modal {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    padding: 28px 32px;
+    width: 420px;
+    max-width: 95vw;
+  }
+  .upload-modal h3 {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    letter-spacing: 0.04em;
+  }
+  .upload-modal p {
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 18px;
+    line-height: 1.55;
+  }
+  .upload-drop-zone {
+    border: 2px dashed var(--border2);
+    border-radius: 8px;
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    margin-bottom: 18px;
+    background: var(--bg3);
+  }
+  .upload-drop-zone:hover, .upload-drop-zone.drag-over {
+    border-color: var(--accent);
+    background: #eef2fc;
+  }
+  .upload-drop-zone .drop-icon { font-size: 28px; margin-bottom: 8px; }
+  .upload-drop-zone .drop-label {
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.5;
+  }
+  .upload-drop-zone .drop-label strong { color: var(--accent); }
+  .upload-selected-name {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--done);
+    margin-bottom: 14px;
+    min-height: 16px;
+    word-break: break-all;
+  }
+  .upload-modal-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 4px;
+  }
+  .upload-status {
+    font-size: 11px;
+    font-family: var(--mono);
+    margin-right: auto;
+    align-self: center;
+    color: var(--text3);
+  }
+  .upload-status.err { color: var(--neg); }
+  /* Password gate modal */
+  .pw-modal {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    padding: 28px 32px;
+    width: 340px;
+    max-width: 95vw;
+  }
+  .pw-modal h3 {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    letter-spacing: 0.04em;
+  }
+  .pw-modal p { font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+  .pw-input-wrap { display: flex; gap: 8px; margin-bottom: 6px; }
+  .pw-input {
+    flex: 1;
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg3);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .pw-input:focus { border-color: var(--accent); background: var(--bg2); }
+  .pw-input.pw-err { border-color: var(--neg); }
+  .pw-error-msg { font-size: 11px; font-family: var(--mono); color: var(--neg); min-height: 16px; margin-bottom: 14px; }
+  .pw-footer { display: flex; gap: 10px; justify-content: flex-end; }
   .screen {
     display: none;
     padding: 28px 28px 60px;
@@ -654,9 +790,55 @@
   </div>
   <div class="nav-right">
     <span class="nav-status" id="nav-status"></span>
-    <button class="btn-refresh" onclick="loadAllData()">&#x21BB; Refresh</button>
+    <button class="btn-refresh" id="btn-download" onclick="downloadExcel()" title="Download current data.xlsm from server">&#x2B07; Download Excel</button>
+    <button class="btn-upload" id="btn-upload" onclick="openUploadModal()">&#x2B06; Upload Excel</button>
+    <button class="btn-refresh" id="btn-refresh" onclick="loadAllData()"><span class="refresh-icon">&#x21BB;</span> Refresh</button>
   </div>
 </nav>
+
+<!-- UPLOAD MODAL -->
+<div class="upload-modal-overlay" id="upload-overlay" onclick="closeUploadModal(event)">
+  <div class="upload-modal">
+    <h3>Upload Excel Data File</h3>
+    <p>Select <strong>data.xlsm</strong> (or .xlsx) from your local machine.<br>
+       The file will replace the server copy and the dashboard will reload automatically.</p>
+    <div class="upload-drop-zone" id="upload-drop-zone"
+         onclick="document.getElementById('upload-file-input').click()"
+         ondragover="event.preventDefault(); this.classList.add('drag-over')"
+         ondragleave="this.classList.remove('drag-over')"
+         ondrop="handleDrop(event)">
+      <div class="drop-icon">&#x1F4C2;</div>
+      <div class="drop-label">Drag &amp; drop your file here, or <strong>click to browse</strong><br>
+        <span style="color:var(--text3);font-size:11px">Accepted: .xlsm, .xlsx</span>
+      </div>
+    </div>
+    <div class="upload-selected-name" id="upload-selected-name"></div>
+    <div class="upload-modal-footer">
+      <span class="upload-status" id="upload-status"></span>
+      <button class="btn-refresh" onclick="closeUploadModal(null)">Cancel</button>
+      <button class="btn-upload" id="btn-do-upload" onclick="doUpload()" disabled>&#x2B06; Upload &amp; Refresh</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="upload-file-input" accept=".xlsm,.xlsx" style="display:none" onchange="onFileSelected(this.files[0])">
+
+<!-- PASSWORD GATE MODAL -->
+<div class="upload-modal-overlay" id="pw-overlay">
+  <div class="pw-modal">
+    <h3>&#x1F512; Access Required</h3>
+    <p id="pw-modal-desc">Enter the password to continue.</p>
+    <div class="pw-input-wrap">
+      <input class="pw-input" type="password" id="pw-input" placeholder="Password"
+             onkeydown="if(event.key==='Enter')checkPassword(); if(event.key==='Escape')closePwModal();"
+             autocomplete="off" />
+    </div>
+    <div class="pw-error-msg" id="pw-error"></div>
+    <div class="pw-footer">
+      <button class="btn-refresh" onclick="closePwModal()">Cancel</button>
+      <button class="btn-upload" onclick="checkPassword()">&#x2714; Confirm</button>
+    </div>
+  </div>
+</div>
 
 <!-- SCREEN 1: SCORE -->
 <div class="screen active" id="screen-score">
@@ -1127,16 +1309,151 @@ function deriveFieldStatus(internal, gpt, gemini, claude) {
   return 'To Do';
 }
 
+/* ====== DOWNLOAD EXCEL ====== */
+var _authToken = null; // {token, ts, action} — cached after password verified
+
+function downloadExcel() {
+  openPwModal('download');
+}
+
+async function _doDownloadExcel() {
+  if (!_authToken || _authToken.action !== 'download') return;
+  var a = document.createElement('a');
+  a.href = '/api/download-excel?t=' + Date.now() + '&token=' + encodeURIComponent(_authToken.token) + '&ts=' + encodeURIComponent(_authToken.ts);
+  a.download = 'data.xlsm';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  _authToken = null;
+}
+
+/* ====== UPLOAD EXCEL ====== */
+var _uploadFile = null;
+var _pwPendingAction = 'upload'; // 'upload' | 'download'
+
+function openPwModal(action) {
+  _pwPendingAction = action || 'upload';
+  var desc = document.getElementById('pw-modal-desc');
+  if (desc) desc.textContent = action === 'download'
+    ? 'Enter the password to download the current data file.'
+    : 'Enter the password to upload a new data file.';
+  document.getElementById('pw-input').value = '';
+  document.getElementById('pw-error').textContent = '';
+  document.getElementById('pw-input').classList.remove('pw-err');
+  document.getElementById('pw-overlay').classList.add('open');
+  setTimeout(function(){ document.getElementById('pw-input').focus(); }, 80);
+}
+
+function openUploadModal() {
+  openPwModal('upload');
+}
+
+function closePwModal() {
+  document.getElementById('pw-overlay').classList.remove('open');
+}
+
+async function checkPassword() {
+  var val = document.getElementById('pw-input').value;
+  var errEl = document.getElementById('pw-error');
+  errEl.textContent = 'Checking…';
+  try {
+    var res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: _pwPendingAction, password: val})
+    });
+    var js = await res.json();
+    if (js.success) {
+      _authToken = {token: js.token, ts: js.ts, action: js.action};
+      closePwModal();
+      if (_pwPendingAction === 'download') {
+        await _doDownloadExcel();
+      } else {
+        _openUploadModalInner();
+      }
+    } else {
+      errEl.textContent = js.error || 'Incorrect password. Try again.';
+      document.getElementById('pw-input').classList.add('pw-err');
+      document.getElementById('pw-input').select();
+    }
+  } catch(e) {
+    errEl.textContent = 'Server error. Try again.';
+  }
+}
+
+function _openUploadModalInner() {
+  _uploadFile = null;
+  document.getElementById('upload-selected-name').textContent = '';
+  document.getElementById('upload-status').textContent = '';
+  document.getElementById('upload-status').className = 'upload-status';
+  document.getElementById('btn-do-upload').disabled = true;
+  document.getElementById('upload-file-input').value = '';
+  document.getElementById('upload-overlay').classList.add('open');
+}
+
+// Keep legacy name working (not exposed in UI)
+function openUploadModal_inner() { _openUploadModalInner(); }
+
+function closeUploadModal(e) {
+  if (e && e.target !== document.getElementById('upload-overlay')) return;
+  document.getElementById('upload-overlay').classList.remove('open');
+}
+
+function onFileSelected(file) {
+  if (!file) return;
+  _uploadFile = file;
+  document.getElementById('upload-selected-name').textContent = '✔ ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+  document.getElementById('btn-do-upload').disabled = false;
+  document.getElementById('upload-status').textContent = '';
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-drop-zone').classList.remove('drag-over');
+  var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) onFileSelected(file);
+}
+
+async function doUpload() {
+  if (!_uploadFile) return;
+  if (!_authToken || _authToken.action !== 'upload') return;
+  var statusEl = document.getElementById('upload-status');
+  var uploadBtn = document.getElementById('btn-do-upload');
+  statusEl.textContent = 'Uploading…';
+  statusEl.className = 'upload-status';
+  uploadBtn.disabled = true;
+  try {
+    var form = new FormData();
+    form.append('file', _uploadFile);
+    form.append('token', _authToken.token);
+    form.append('ts', _authToken.ts);
+    _authToken = null;
+    var res = await fetch('/api/upload-excel', { method: 'POST', body: form });
+    var json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.error || 'Upload failed');
+    statusEl.textContent = 'Uploaded!';
+    document.getElementById('upload-overlay').classList.remove('open');
+    await loadAllData();
+  } catch (err) {
+    statusEl.textContent = err.message;
+    statusEl.className = 'upload-status err';
+    uploadBtn.disabled = false;
+  }
+}
+
 /* ====== LOAD FROM API ====== */
 async function loadAllData() {
   const status = document.getElementById('nav-status');
+  const btn = document.getElementById('btn-refresh');
   status.textContent = 'Loading...';
+  if (btn) { btn.disabled = true; btn.classList.add('loading'); }
+  const t = Date.now();
   try {
     const [fieldsRes, atRes, snapRes, histRes] = await Promise.all([
-      fetch('/api/data'),
-      fetch('/api/autotests'),
-      fetch('/api/snapshots'),
-      fetch('/api/history')
+      fetch('/api/data?t=' + t),
+      fetch('/api/autotests?t=' + t),
+      fetch('/api/snapshots?t=' + t),
+      fetch('/api/history?t=' + t)
     ]);
     const fieldsJson = await fieldsRes.json();
     const atJson     = await atRes.json();
@@ -1210,6 +1527,7 @@ async function loadAllData() {
     historyDirty = true;
 
     status.textContent = 'Updated ' + new Date().toLocaleTimeString();
+    if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
 
     // Render current screen
     requestScoreRender();
@@ -1223,6 +1541,7 @@ async function loadAllData() {
 
   } catch (err) {
     status.textContent = 'Error loading data';
+    if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
     document.getElementById('score-kpis').innerHTML =
       '<div class="error-msg" style="grid-column:1/-1">' + err.message + '</div>';
   }
@@ -1319,12 +1638,16 @@ function priorityBadge(p) {
 }
 
 /* ====== SCREEN 1: SCORE ====== */
-var SCORE_EXCLUDE_PROJECTS = ['Complience test'];
+var SCORE_EXCLUDE_PROJECTS = null; // evaluated at render time via _isComplianceProject()
+function _isComplianceProject(name) {
+  var n = String(name || '').toLowerCase().trim();
+  return n.startsWith('compli') && n.indexOf('test') !== -1;
+}
 var scoreFilter = { priority: null, modelKey: null };
 
 function renderScore() {
   var allFields = DATA.fields.filter(function(r){
-    return SCORE_EXCLUDE_PROJECTS.indexOf(r.project) === -1;
+    return !_isComplianceProject(r.project);
   });
 
   // Base set: filter by selected priority (if any)
@@ -1712,12 +2035,19 @@ async function takeSnapshot() {
     var res = await fetch('/api/snapshot/take', {method: 'POST'});
     var js  = await res.json();
     if (js.success) {
-      var sr = await fetch('/api/snapshots');
+      var sr = await fetch('/api/snapshots?t=' + Date.now());
       var sj = await sr.json();
       if (sj.success) { WEEKLY_DATA = sj.weeks || []; renderWeeklyPanel(); }
+      if (btn) { btn.textContent = '\u2714 Saved'; setTimeout(function(){ btn.textContent = '+ Snapshot'; }, 2000); }
+    } else {
+      alert('Snapshot failed: ' + (js.error || 'Unknown error'));
+      if (btn) { btn.textContent = '+ Snapshot'; }
     }
-  } catch(e) { console.error('Snapshot error:', e); }
-  if (btn) { btn.disabled = false; btn.textContent = '+ Snapshot'; }
+  } catch(e) {
+    alert('Snapshot error: ' + e.message);
+    if (btn) { btn.textContent = '+ Snapshot'; }
+  }
+  if (btn) { btn.disabled = false; }
 }
 
 /* ====== SCREEN 2: FIELDS ====== */
@@ -1934,7 +2264,7 @@ function getFilteredFields() {
 function renderFieldsOverview(rows) {
   var el = document.getElementById('fields-overview');
   if (!el) return;
-  var rowsNoComp = rows.filter(function(r){ return r.project !== 'Complience test'; });
+  var rowsNoComp = rows.filter(function(r){ return !_isComplianceProject(r.project); });
   function pctAtLeast90(subset, predicate) {
     if (!subset.length) return null;
     var cnt = subset.filter(predicate).length;
@@ -1992,10 +2322,10 @@ function renderFieldsTable(rows) {
     sorted.forEach(function(r) {
       var tp = rowTargetPct(r);
       html += '<tr>';
-      html += '<td class="left">'+r.project+'</td>';
-      html += '<td class="left">'+r.category+'</td>';
-      html += '<td class="doctype-cell left">'+r.docType+'</td>';
-      html += '<td class="field-cell left">'+r.field+'</td>';
+      html += '<td class="left">'+esc(r.project)+'</td>';
+      html += '<td class="left">'+esc(r.category)+'</td>';
+      html += '<td class="doctype-cell left">'+esc(r.docType)+'</td>';
+      html += '<td class="field-cell left">'+esc(r.field)+'</td>';
       html += '<td>'+(r.priority != null ? priorityBadge(r.priority) : '\u2014')+'</td>';
       html += '<td class="mono" style="font-weight:600'+(tp != null && tp >= 90 ? ';background:#d4f0e0;color:#1a7a45' : '')+'">'+(tp != null ? tp.toFixed(1)+'%' : '\u2014')+'</td>';
       html += '<td>'+badge(r.internal)+'</td>';
