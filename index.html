@@ -1828,6 +1828,7 @@ function renderWeeklyPanel() {
   html += '</tr></thead><tbody>';
   WEEKLY_DATA.forEach(function(w) {
     var isStart = !!w.is_start;
+    var isFirst = !!w.is_first;  // first weekly snapshot — no deltas to show
     var takenAt = '';
     if (w.taken_at) {
       try {
@@ -1848,7 +1849,7 @@ function renderWeeklyPanel() {
     if (takenAt) html += '<div class="weekly-taken-at">' + takenAt + '</div>';
     html += '</td>';
     html += '<td class="mono">' + fmt(w.total_fields) + '</td>';
-    if (isStart) {
+    if (isStart || isFirst) {
       html += '<td class="mono" style="color:var(--text3)">\u2014</td>';
       html += '<td class="mono" style="color:var(--text3)">\u2014</td>';
     } else {
@@ -1867,7 +1868,7 @@ function renderWeeklyPanel() {
     }
     models.forEach(function(m) {
       var v = w.by_model && w.by_model[m.key] ? w.by_model[m.key].to_done : 0;
-      if (isStart) {
+      if (isStart || isFirst) {
         html += '<td class="mono">' + (v > 0 ? v : '\u2014') + '</td>';
       } else if (v > 0) {
         html += '<td class="mono weekly-cell-pos-done">+' + fmt(v) + '</td>';
@@ -1877,7 +1878,7 @@ function renderWeeklyPanel() {
     });
     models.forEach(function(m) {
       var v = w.by_model && w.by_model[m.key] ? w.by_model[m.key].to_progress : 0;
-      if (isStart) {
+      if (isStart || isFirst) {
         html += '<td class="mono">' + (v > 0 ? v : '\u2014') + '</td>';
       } else if (v > 0) {
         html += '<td class="mono weekly-cell-pos-prog">+' + fmt(v) + '</td>';
@@ -2059,9 +2060,28 @@ async function takeSnapshot() {
     var res = await fetch('/api/snapshot/take', {method: 'POST'});
     var js  = await res.json();
     if (js.success) {
-      var sr = await fetch('/api/snapshots?t=' + Date.now());
+      var t = Date.now();
+      var responses = await Promise.all([
+        fetch('/api/snapshots?t=' + t),
+        fetch('/api/history?t=' + t)
+      ]);
+      var sr = responses[0];
+      var hr = responses[1];
       var sj = await sr.json();
-      if (sj.success) { WEEKLY_DATA = sj.weeks || []; renderWeeklyPanel(); }
+      var hj = await hr.json();
+      if (sj.success) {
+        WEEKLY_DATA = sj.weeks || [];
+        renderWeeklyPanel();
+      }
+      if (hj.success) {
+        HISTORY_DATA = {
+          weeks: hj.weeks || [],
+          changes: hj.changes || []
+        };
+        initHistoryFilters();
+        historyDirty = true;
+        requestHistoryRender(true);
+      }
       if (btn) { btn.textContent = '\u2714 Saved'; setTimeout(function(){ btn.textContent = '+ Snapshot'; }, 2000); }
     } else {
       alert('Snapshot failed: ' + (js.error || 'Unknown error'));

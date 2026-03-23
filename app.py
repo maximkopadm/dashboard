@@ -50,12 +50,12 @@ def _norm_status(s):
 
 def _is_compliance_test_key(k):
     """Return True when snapshot key belongs to a Compliance/Complience test project."""
-    project = str(k or '').split('|', 1)[0].strip().lower()
+    project = _strip_row_suffix(k).split('|', 1)[0].strip().lower()
     return 'test' in project and project.startswith('compli')
 
 def _parse_snapshot_key(k):
     """Split a snapshot key into Project/Category/Document type/Field parts."""
-    parts = str(k or '').split('|', 3)
+    parts = _strip_row_suffix(k).split('|', 3)
     while len(parts) < 4:
         parts.append('')
     return {
@@ -64,6 +64,25 @@ def _parse_snapshot_key(k):
         'doc_type': parts[2].strip(),
         'field': parts[3].strip(),
     }
+
+def _strip_row_suffix(k):
+    """Return base row key without occurrence suffix (::N)."""
+    return str(k or '').split('::', 1)[0]
+
+def _normalize_field_states(raw_states):
+    """Normalize snapshot states for backward compatibility.
+
+    Old snapshots used keys without ::N suffix (duplicates collapsed).
+    New snapshots use base_key::occurrence for stable duplicate tracking.
+    """
+    states = raw_states or {}
+    if not states:
+        return {}
+    # Already in new format.
+    if any('::' in str(k) for k in states.keys()):
+        return states
+    # Old format: promote to occurrence #1.
+    return {f'{k}::1': v for k, v in states.items()}
 
 def _load_snaps():
     if os.path.exists(SNAPSHOT_FILE):
@@ -74,11 +93,57 @@ def _load_snaps():
             pass
     return []
 
+BACKUP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'snapshots_backups')
+
+def _backup_snaps():
+    """Copy current snapshots.json to a timestamped backup. Keep last 20 backups."""
+    if not os.path.exists(SNAPSHOT_FILE):
+        return
+    try:
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        tz  = ZoneInfo('America/New_York') if ZoneInfo else None
+        now = datetime.now(tz) if tz else datetime.utcnow()
+        ts  = now.strftime('%Y%m%d_%H%M%S')
+        dst = os.path.join(BACKUP_DIR, f'snapshots_{ts}.json')
+        import shutil
+        shutil.copy2(SNAPSHOT_FILE, dst)
+        # Prune: keep newest 20 backups only
+        backups = sorted(
+            [f for f in os.listdir(BACKUP_DIR) if f.startswith('snapshots_') and f.endswith('.json')]
+        )
+        for old in backups[:-20]:
+            try:
+                os.remove(os.path.join(BACKUP_DIR, old))
+            except OSError:
+                pass
+    except Exception as e:
+        print(f'Backup warning: {e}')
+
 def _save_snaps(snaps):
+    _backup_snaps()   # always backup before writing
     tmp = SNAPSHOT_FILE + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as fh:
         json.dump(snaps, fh, ensure_ascii=False, indent=2)
     os.replace(tmp, SNAPSHOT_FILE)
+
+def _latest_per_week(snaps):
+    """Return one snapshot per week_num — the most recently taken one.
+    Keeps all is_start entries separately (they have week_num=-1).
+    """
+    from collections import defaultdict
+    buckets = defaultdict(list)
+    for s in snaps:
+        buckets[s.get('week_num', 0)].append(s)
+    result = []
+    for wn, group in sorted(buckets.items()):
+        if wn == -1:
+            # Keep only the latest active start (non-superseded)
+            active = [s for s in group if not s.get('superseded')]
+            if active:
+                result.append(max(active, key=lambda s: s.get('taken_at', '')))
+        else:
+            result.append(max(group, key=lambda s: s.get('taken_at', '')))
+    return result
 
 def take_snapshot():
     """Capture the current Fields sheet state into snapshots.json."""
@@ -89,13 +154,16 @@ def take_snapshot():
         df = pd.read_excel(DATA_FILE, sheet_name='Fields')
         df = df.where(pd.notna(df), '')
         states = {}
+        key_occurrence = {}
         for _, row in df.iterrows():
-            key = '|'.join([
+            base_key = '|'.join([
                 str(row.get('Project', '') or '').strip(),
                 str(row.get('Category', '') or '').strip(),
                 str(row.get('Document type', '') or '').strip(),
                 str(row.get('Field', '') or '').strip(),
             ])
+            key_occurrence[base_key] = key_occurrence.get(base_key, 0) + 1
+            key = f'{base_key}::{key_occurrence[base_key]}'
             states[key] = {
                 'internal': _norm_status(row.get('Internal tool', '')),
                 'gpt':      _norm_status(row.get('GPT', '')),
@@ -113,10 +181,9 @@ def take_snapshot():
             'field_states': states,
         }
         snaps = _load_snaps()
-        idx = next((i for i, s in enumerate(snaps) if s['week_num'] == snap['week_num']), None)
-        if idx is not None: snaps[idx] = snap
-        else: snaps.append(snap)
-        snaps.sort(key=lambda s: s['week_num'])
+        # Append — never delete existing snapshots. Display uses latest-per-week.
+        snaps.append(snap)
+        snaps.sort(key=lambda s: (s.get('week_num', 0), s.get('taken_at', '')))
         _save_snaps(snaps)
         print(f"Snapshot saved \u2013 W{snap['week_num']} ({snap['week_label']}), {snap['total_fields']} fields")
     except Exception as e:
@@ -130,13 +197,16 @@ def take_start_snapshot():
         df = pd.read_excel(DATA_FILE, sheet_name='Fields')
         df = df.where(pd.notna(df), '')
         states = {}
+        key_occurrence = {}
         for _, row in df.iterrows():
-            key = '|'.join([
+            base_key = '|'.join([
                 str(row.get('Project', '') or '').strip(),
                 str(row.get('Category', '') or '').strip(),
                 str(row.get('Document type', '') or '').strip(),
                 str(row.get('Field', '') or '').strip(),
             ])
+            key_occurrence[base_key] = key_occurrence.get(base_key, 0) + 1
+            key = f'{base_key}::{key_occurrence[base_key]}'
             states[key] = {
                 'internal': _norm_status(row.get('Internal tool', '')),
                 'gpt':      _norm_status(row.get('GPT', '')),
@@ -154,7 +224,10 @@ def take_start_snapshot():
             'field_states': states,
         }
         snaps = _load_snaps()
-        snaps = [s for s in snaps if not s.get('is_start')]  # remove previous start
+        # Archive previous start snapshots instead of deleting them.
+        for s in snaps:
+            if s.get('is_start') and not s.get('superseded'):
+                s['superseded'] = True
         snaps.append(snap)
         snaps.sort(key=lambda s: s['week_num'])
         _save_snaps(snaps)
@@ -316,14 +389,20 @@ def get_snapshots():
     if not snaps:
         return jsonify({'success': True, 'weeks': []})
 
+    # Use latest snapshot per week (deduplicated) for display.
+    effective = _latest_per_week(snaps)
+
     # Separate the 'Start' baseline from regular weekly snapshots
-    start_snap = next((s for s in snaps if s.get('is_start')), None)
-    week_snaps = [s for s in snaps if not s.get('is_start')]
+    start_snap = next((s for s in effective if s.get('is_start')), None)
+    week_snaps = sorted(
+        [s for s in effective if not s.get('is_start')],
+        key=lambda s: (s.get('week_num', 0), s.get('taken_at', '')),
+    )
     result = []
 
     # --- Start row: absolute Done / In-Progress counts per model ---
     if start_snap:
-        st = start_snap.get('field_states', {})
+        st = _normalize_field_states(start_snap.get('field_states', {}))
         by_model = {}
         non_compliance_keys = [k for k in st.keys() if not _is_compliance_test_key(k)]
         for m in ('internal', 'gpt', 'gemini', 'claude'):
@@ -343,42 +422,50 @@ def get_snapshots():
             'by_model':     by_model,
         })
 
-    # --- Weekly rows: delta vs previous snapshot (Start → W0 → W1 …) ---
-    prev_snap = start_snap  # W0 delta vs Start; if no Start, delta vs empty
+    # --- Weekly rows: delta vs previous snapshot (W0 → W1 → W2 …) ---
+    prev_snap = start_snap  # if a Start baseline exists, W0 delta is vs Start
+    is_first = (prev_snap is None)  # track whether this is the very first snapshot
     for snap in week_snaps:
-        curr_st   = snap.get('field_states', {})
-        prev_st   = prev_snap.get('field_states', {}) if prev_snap else {}
+        curr_st   = _normalize_field_states(snap.get('field_states', {}))
+        prev_st   = _normalize_field_states(prev_snap.get('field_states', {})) if prev_snap else {}
         curr_keys = set(curr_st.keys())
-        new_fields = len(curr_keys - set(prev_st.keys()))
-        removed_fields = len(set(prev_st.keys()) - curr_keys) if prev_snap else 0
-        is_w0 = snap.get('week_num') == 0
+        # If there is no previous snapshot at all, treat this row as a pure baseline:
+        # show no added/removed deltas to avoid misleading "+N added" from an empty baseline.
+        if is_first:
+            new_fields = 0
+            removed_fields = 0
+        else:
+            new_fields     = len(curr_keys - set(prev_st.keys()))
+            removed_fields = len(set(prev_st.keys()) - curr_keys)
+        # Always exclude Compliance Test rows to match the "Extraction by Model" table.
+        non_comp_keys = [k for k in curr_keys if not _is_compliance_test_key(k)]
         by_model = {}
         for m in ('internal', 'gpt', 'gemini', 'claude'):
-            to_done = to_prog = 0
-            for k in curr_keys:
-                cs = curr_st[k].get(m, 'To Do')
-                ps = prev_st.get(k, {}).get(m, 'To Do') if prev_st else 'To Do'
-                if cs == 'Done' and ps != 'Done':
-                    # W0 row: exclude Compliance Test from Done delta
-                    if (not is_w0) or (not _is_compliance_test_key(k)):
-                        to_done += 1
-                if cs == 'In Progress' and ps not in ('Done', 'In Progress'):   to_prog += 1
+            if is_first:
+                # Baseline row: show absolute Done / In Progress counts (no compliance)
+                to_done = sum(1 for k in non_comp_keys if curr_st[k].get(m) == 'Done')
+                to_prog = sum(1 for k in non_comp_keys if curr_st[k].get(m) == 'In Progress')
+            else:
+                to_done = to_prog = 0
+                for k in non_comp_keys:
+                    cs = curr_st[k].get(m, 'To Do')
+                    ps = prev_st.get(k, {}).get(m, 'To Do') if prev_st else 'To Do'
+                    if cs == 'Done' and ps != 'Done':      to_done += 1
+                    if cs == 'In Progress' and ps not in ('Done', 'In Progress'): to_prog += 1
             by_model[m] = {'to_done': to_done, 'to_progress': to_prog}
-        total_fields_out = snap['total_fields']
-        if is_w0:
-            # W0 row: exclude Compliance Test from Total
-            total_fields_out = sum(1 for k in curr_keys if not _is_compliance_test_key(k))
         result.append({
-            'week_num':     snap['week_num'],
-            'is_start':     False,
-            'week_label':   snap['week_label'],
-            'taken_at':     snap['taken_at'],
-            'total_fields': total_fields_out,
-            'new_fields':   new_fields,
+            'week_num':       snap['week_num'],
+            'is_start':       False,
+            'is_first':       is_first,
+            'week_label':     snap['week_label'],
+            'taken_at':       snap['taken_at'],
+            'total_fields':   len(non_comp_keys),
+            'new_fields':     new_fields,
             'removed_fields': removed_fields,
-            'by_model':     by_model,
+            'by_model':       by_model,
         })
         prev_snap = snap
+        is_first  = False
 
     return jsonify({'success': True, 'weeks': result})
 
@@ -389,8 +476,14 @@ def get_history():
     if not snaps:
         return jsonify({'success': True, 'weeks': [], 'changes': []})
 
-    start_snap = next((s for s in snaps if s.get('is_start')), None)
-    week_snaps = sorted([s for s in snaps if not s.get('is_start')], key=lambda s: s.get('week_num', 0))
+    # Use latest snapshot per week (deduplicated) for display.
+    effective = _latest_per_week(snaps)
+
+    start_snap = next((s for s in effective if s.get('is_start')), None)
+    week_snaps = sorted(
+        [s for s in effective if not s.get('is_start')],
+        key=lambda s: (s.get('week_num', 0), s.get('taken_at', '')),
+    )
 
     models = ('internal', 'gpt', 'gemini', 'claude')
     changes = []
@@ -398,8 +491,8 @@ def get_history():
     prev_snap = start_snap
 
     for snap in week_snaps:
-        curr_st = snap.get('field_states', {})
-        prev_st = prev_snap.get('field_states', {}) if prev_snap else {}
+        curr_st = _normalize_field_states(snap.get('field_states', {}))
+        prev_st = _normalize_field_states(prev_snap.get('field_states', {})) if prev_snap else {}
 
         curr_keys = set(curr_st.keys())
         prev_keys = set(prev_st.keys())

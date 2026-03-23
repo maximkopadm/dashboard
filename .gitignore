@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+env/
+
+# Excel temp files
+~$*
+
+# Runtime snapshot backups (auto-generated, not source)
+snapshots_backups/
