@@ -1447,6 +1447,15 @@ async function loadAllData() {
   const btn = document.getElementById('btn-refresh');
   status.textContent = 'Loading...';
   if (btn) { btn.disabled = true; btn.classList.add('loading'); }
+
+  async function parseJsonSafe(res, fallbackMsg) {
+    try {
+      return await res.json();
+    } catch (_) {
+      return { success: false, error: fallbackMsg || 'Invalid JSON response' };
+    }
+  }
+
   const t = Date.now();
   try {
     const [fieldsRes, atRes, snapRes, histRes] = await Promise.all([
@@ -1455,10 +1464,12 @@ async function loadAllData() {
       fetch('/api/snapshots?t=' + t),
       fetch('/api/history?t=' + t)
     ]);
-    const fieldsJson = await fieldsRes.json();
-    const atJson     = await atRes.json();
-    const snapJson   = await snapRes.json();
-    const histJson   = await histRes.json();
+    const [fieldsJson, atJson, snapJson, histJson] = await Promise.all([
+      parseJsonSafe(fieldsRes, 'Failed to parse fields response'),
+      parseJsonSafe(atRes, 'Failed to parse auto-tests response'),
+      parseJsonSafe(snapRes, 'Failed to parse snapshots response'),
+      parseJsonSafe(histRes, 'Failed to parse history response')
+    ]);
 
     if (!fieldsRes.ok || !fieldsJson.success)
       throw new Error(fieldsJson.error || 'Failed to load fields');
@@ -1508,10 +1519,14 @@ async function loadAllData() {
           target:   r['Target number'] !== '' && r['Target number'] != null ? Number(r['Target number']) : null
         };
       });
+    } else {
+      DATA.autoTests = [];
     }
 
     if (snapRes.ok && snapJson.success) {
       WEEKLY_DATA = snapJson.weeks || [];
+    } else {
+      WEEKLY_DATA = [];
     }
     if (histRes.ok && histJson.success) {
       HISTORY_DATA = {
@@ -1623,6 +1638,15 @@ function pct(n, d) {
 function fmt(n) {
   if (n == null || n === '') return '\u2014';
   return Number(n).toLocaleString('en-US');
+}
+
+function esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function priorityBadge(p) {
