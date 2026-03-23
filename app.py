@@ -502,6 +502,19 @@ def _verify_token(action, token, ts):
     except Exception:
         return False
 
+def _permission_error_payload(path, exc):
+    dir_path = os.path.dirname(path)
+    file_exists = os.path.exists(path)
+    return {
+        'error': str(exc),
+        'path': path,
+        'dir': dir_path,
+        'can_write_dir': os.access(dir_path, os.W_OK),
+        'file_exists': file_exists,
+        'can_write_file': os.access(path, os.W_OK) if file_exists else None,
+        'hint': 'Grant the app user write access to the target directory/file (chown/chmod).',
+    }
+
 @app.route('/api/download-excel', methods=['GET'])
 def download_excel():
     """Serve the current data.xlsm for download (requires auth token)."""
@@ -517,6 +530,7 @@ def download_excel():
 @app.route('/api/upload-excel', methods=['POST'])
 def upload_excel():
     """Accept an uploaded Excel file and replace data.xlsm on the server (requires auth token)."""
+    tmp_path = DATA_FILE + '.tmp'
     try:
         token = request.form.get('token', '')
         ts    = request.form.get('ts', '')
@@ -530,7 +544,6 @@ def upload_excel():
         ext = os.path.splitext(f.filename)[1].lower()
         if ext not in ('.xlsm', '.xlsx'):
             return jsonify({'error': 'Only .xlsm or .xlsx files are accepted'}), 400
-        tmp_path = DATA_FILE + '.tmp'
         f.save(tmp_path)
         if os.path.exists(DATA_FILE):
             try:
@@ -539,8 +552,16 @@ def upload_excel():
                 pass
         os.replace(tmp_path, DATA_FILE)
         return jsonify({'success': True, 'filename': f.filename})
+    except PermissionError as e:
+        return jsonify(_permission_error_payload(DATA_FILE, e)), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 @app.route('/api/snapshot/take', methods=['POST'])
 def manual_snapshot():
